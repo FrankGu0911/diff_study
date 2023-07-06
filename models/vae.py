@@ -61,7 +61,7 @@ class Encoder(torch.nn.Module):
     def __init__(self, input_channels):
         super().__init__()
         self.encoder = torch.nn.Sequential(
-            #in
+            #in 
             torch.nn.Conv2d(input_channels, 128, kernel_size=3, stride=1, padding=1),
 
             #down
@@ -112,7 +112,8 @@ class Encoder(torch.nn.Module):
             torch.nn.Conv2d(8, 8, 1),
         )
     def forward(self, x):
-        return self.encoder(x)
+        h = self.encoder(x)
+        return h[:, :4], h[:, 4:] # mean, logvar
 
 class Decoder(torch.nn.Module):
     def __init__(self, output_channels):
@@ -167,11 +168,8 @@ class VAE(torch.nn.Module):
         self.encoder = Encoder(input_channels)
         self.decoder = Decoder(output_channels)
     
-    def sample(self, h):
-        #h -> [1, 8, 32, 32]
+    def sample(self, mean, logvar):
         #[1, 4, 32, 32]
-        mean = h[:, :4]
-        logvar = h[:, 4:]
         std = logvar.exp()**0.5
         #[1, 4, 32, 32]
         h = torch.randn(mean.shape, device=mean.device)
@@ -179,11 +177,10 @@ class VAE(torch.nn.Module):
         return h
     
     def forward(self, x):
-        x = self.encoder(x)
-        x = self.sample(x)
+        mean, logvar = self.encoder(x)
+        x = self.sample(mean, logvar)
         x = self.decoder(x)
-        return x
-
+        return x, mean, logvar
 
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
