@@ -1,3 +1,4 @@
 .vscode
 test/data
 __pycache__
+*.pth
