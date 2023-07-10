@@ -11,13 +11,16 @@ from tqdm import tqdm
 from models.vae import VAE
 from dataset.carla_topdown_dataset import CarlaTopDownDataset
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-def save_checkpoint(epoch:int,model,opt):
+def save_checkpoint(epoch:int,model,opt,path):
     check_point = {
         "epoch": epoch,
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": opt.state_dict(),
     }
-    torch.save(check_point, os.path.join('vae_model', f"vae_model_{epoch}.pth"))
+    if not os.path.exists(path):
+        os.makedirs(path)
+    
+    torch.save(check_point, os.path.join(path, f"vae_model_{epoch}.pth"))
 
 def latest_model_path(path):
     if not os.path.exists(path):
@@ -56,7 +59,7 @@ def vae_train(cur_epoch,vae_model, vae_opt, loader,epoch):
             if i % 10 == 0:
                 # print(f"Epoch {e}:{i}\t loss: {loss.item()}")
                 writer.add_scalar(scalar_name, loss.item(), i)
-        save_checkpoint(e, vae_model, vae_opt)
+        save_checkpoint(e, vae_model, vae_opt, 'pretrained/vae_model')
             
 if __name__ == "__main__":
     epoch = 50
