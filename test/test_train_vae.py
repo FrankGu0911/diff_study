@@ -49,6 +49,7 @@ def vae_train(cur_epoch,vae_model, vae_opt, loader,epoch):
     vae_model.train()
     for e in range(cur_epoch, epoch):
         scalar_name = 'epoch_%d' % e
+        loss_list = []
         for i, (x, _) in tqdm(enumerate(loader), total = len(loader)):
             x = x.to(device)
             vae_opt.zero_grad()
@@ -56,9 +57,11 @@ def vae_train(cur_epoch,vae_model, vae_opt, loader,epoch):
             loss = vae_loss(x, con_x, mu, logvar)
             loss.backward()
             vae_opt.step()
+            loss_list.append(loss.item())
             if i % 10 == 0:
                 # print(f"Epoch {e}:{i}\t loss: {loss.item()}")
                 writer.add_scalar(scalar_name, loss.item(), i)
+        writer.add_scalar('loss', sum(loss_list)/len(loss_list), e)
         save_checkpoint(e, vae_model, vae_opt, 'pretrained/vae_model')
             
 if __name__ == "__main__":
@@ -66,7 +69,8 @@ if __name__ == "__main__":
     batch_size = 6
     vae_model = VAE(1,1).to(device)
     optimizer = torch.optim.Adam(vae_model.parameters(), lr=1e-3)
-    ds = CarlaTopDownDataset('..\\..\\dataset')
+    ds = CarlaTopDownDataset('C:\\dataset')
+    # ds = CarlaTopDownDataset('test\\data')
     model_path = latest_model_path('pretrained/vae_model')
     if model_path:
         checkpoint = torch.load(model_path)
@@ -75,5 +79,11 @@ if __name__ == "__main__":
         cur_epoch = checkpoint['epoch'] + 1
     else:
         cur_epoch = 0
+    # cur_epoch = 0
+    logging.info(f"Start at epoch{cur_epoch}")
     loader = torch.utils.data.DataLoader(ds, batch_size=batch_size, shuffle=True)
-    vae_train(cur_epoch,vae_model, optimizer, loader, epoch)
+    if cur_epoch < epoch:
+        vae_train(cur_epoch,vae_model, optimizer, loader, epoch)
+    else:
+        pass
+    # os.system('shutdown -s -t 60')

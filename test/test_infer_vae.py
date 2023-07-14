@@ -38,25 +38,39 @@ seg_tag = {
 }
 
 def cvt_rgb_seg(seg:np.ndarray):
-    print(seg.shape)
+    # print(seg.shape)
     for i in seg_tag:
-      seg = np.where(seg == i, np.array([i,i,i]), seg)
+      seg = np.where(seg == [i,i,i], np.array(seg_tag[i]), seg)
 
     seg = seg.astype(np.uint8)
     seg = cv2.cvtColor(seg, cv2.COLOR_BGR2RGB)
     return seg
 
 vae_model = VAE(1,1).to(device)
-vae_model.load_state_dict(torch.load('vae_model_7.pth'))
+model = torch.load('pretrained/vae_model_38.pth')['model_state_dict']
+vae_model.load_state_dict(model)
 
 ds = CarlaTopDownDataset('test/data')
 # print((ds[0][0]*256).char())
 image = ds[0][0]
-image_neo = vae_model(image.unsqueeze(0).to(device))
-image_neo_show = (image_neo[0].detach()*256).cpu().clone().squeeze(0).numpy().astype(np.uint8)
+print(image.shape)
+image_np = (torch.cat((image,image,image))*torch.tensor(25)).permute(1, 2, 0).numpy().astype(np.uint8)
+print(image_np[0][0])
+image_neo = vae_model(image.unsqueeze(0).to(device))[0]
+# print(image_neo[0].shape)
+image_neo = torch.cat((image_neo,image_neo,image_neo),dim=1).squeeze(0)
+# print(image_neo.shape)
+image_neo = image_neo.permute(1, 2, 0)
+image_neo_show = (image_neo.detach()*25).cpu().clone().numpy().astype(np.uint8)
+
+# print(image_neo_show.shape)
 # image_neo_show = cv2.cvtColor(image_neo_show, cv2.COLOR_GRAY2RGB)
-# cv2.imshow(image_neo_show)
-# print(image_neo_show)
+image_neo_show = cvt_rgb_seg(image_neo_show)
+image_np = cvt_rgb_seg(image_np)
+cv2.imshow('test',image_neo_show)
+cv2.imshow('test1',image_np)
+cv2.waitKey(0)
+# print(image_neo_show.max())
 # for image,_ in ds:
 #     # seg_img = cvt_rgb_seg(image.numpy().squeeze(0))
 #     # cv2.imshow('seg_bev_crop',seg_img)
