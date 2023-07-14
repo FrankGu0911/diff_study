@@ -157,6 +157,7 @@ class Decoder(torch.nn.Module):
                 torch.nn.GroupNorm(num_channels=128, num_groups=32, eps=1e-6),
                 torch.nn.SiLU(),
                 torch.nn.Conv2d(128, output_channels, kernel_size=3, padding=1),
+                torch.nn.Sigmoid()
             ),
         )
     def forward(self, x):
