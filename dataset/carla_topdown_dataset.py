@@ -42,7 +42,8 @@ class CarlaTopDownDataset(BaseIODataset):
         topdown_img = self._load_image(os.path.join(route_dir, 'topdown', '%04d.png' % frame_id))
         tar_x, tar_y = self.img_size
         topdown_img = topdown_img.crop(self.calc_crop(tar_x, tar_y))
-        return transforms.ToTensor()(topdown_img), torch.Tensor([0])
+        topdown_img = transforms.ToTensor()(topdown_img) * 255 / 25
+        return topdown_img, torch.Tensor([0])
         
     def calc_crop(self,tar_x, tar_y):
         if tar_x > 512 or tar_y > 512:
