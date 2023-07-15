@@ -185,7 +185,7 @@ class VAE(torch.nn.Module):
 
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = VAE(1, 1).to(device)
-    x = torch.randn(1, 1, 256, 256).to(device)
+    model = VAE(26, 26).to(device)
+    x = torch.randn(1, 26, 256, 256).to(device)
     y = model(x)
-    print(y.shape)
+    print(y[0].shape, y[1].shape, y[2].shape)

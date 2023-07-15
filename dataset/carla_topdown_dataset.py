@@ -9,13 +9,15 @@ class CarlaTopDownDataset(BaseIODataset):
         root,
         img_size=(256, 256),
         weathers=[0,1, 3, 6, 8],
-        towns=[1,2,3]
+        towns=[1,2,3],
+        onehot=True,
         ):
         super().__init__(root)
         self.img_size = img_size
         dataset_indexs = self._load_text(os.path.join(root, 'dataset_index.txt')).split('\n')
         pattern = re.compile('weather-(\d+).*town(\d\d)')
         self.route_frames = []
+        self.onehot = onehot
         for line in dataset_indexs:
             if len(line.split()) != 2:
                 continue
@@ -42,9 +44,20 @@ class CarlaTopDownDataset(BaseIODataset):
         topdown_img = self._load_image(os.path.join(route_dir, 'topdown', '%04d.png' % frame_id))
         tar_x, tar_y = self.img_size
         topdown_img = topdown_img.crop(self.calc_crop(tar_x, tar_y))
-        topdown_img = transforms.ToTensor()(topdown_img) * 255 / 25
+        topdown_img = (transforms.ToTensor()(topdown_img) * 255).to(torch.uint8)
+        if self.onehot:
+            topdown_img = self.get_one_hot(topdown_img, 26).to(torch.float32)
+        else:
+            topdown_img = topdown_img.to(torch.float32) / 25
         return topdown_img, torch.Tensor([0])
-        
+    
+    def get_one_hot(self,label, N):
+        dtype = label.dtype
+        shape = label.shape
+        ones = torch.eye(N)
+        onehot = ones.index_select(0, label.int().view(-1)).reshape(*shape, N).to(dtype).squeeze(0).permute(2,0,1)
+        return onehot
+    
     def calc_crop(self,tar_x, tar_y):
         if tar_x > 512 or tar_y > 512:
             return (0,0,512,512)
@@ -59,8 +72,8 @@ class CarlaTopDownDataset(BaseIODataset):
             return (x,y,x+tar_x,y+tar_y)
 
 if __name__ == '__main__':
-    ds = CarlaTopDownDataset('test/data')
+    ds = CarlaTopDownDataset('test/data',onehot=True)
     dl = DataLoader(ds,batch_size=4,shuffle=True)
     for i in dl:
-        print(i.shape)
+        print(i[0].shape)
         break

@@ -5,7 +5,7 @@ sys.path.append('./dataset')
 # print(sys.path)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 from torch.utils.tensorboard import SummaryWriter
-writer = SummaryWriter(log_dir='log/vae')
+writer = SummaryWriter(log_dir='log/vae_one_hot')
 from tqdm import tqdm
 
 from models.vae import VAE
@@ -48,7 +48,7 @@ def vae_loss(ori_x, con_x, mu, logvar):
 def vae_train(cur_epoch,vae_model, vae_opt, loader,epoch):
     vae_model.train()
     for e in range(cur_epoch, epoch):
-        scalar_name = 'epoch_%d' % e
+        # scalar_name = 'epoch_%d' % e
         loss_list = []
         for i, (x, _) in tqdm(enumerate(loader), total = len(loader)):
             x = x.to(device)
@@ -58,19 +58,19 @@ def vae_train(cur_epoch,vae_model, vae_opt, loader,epoch):
             loss.backward()
             vae_opt.step()
             loss_list.append(loss.item())
-            if i % 10 == 0:
-                # print(f"Epoch {e}:{i}\t loss: {loss.item()}")
-                writer.add_scalar(scalar_name, loss.item(), i)
+            # if i % 10 == 0:
+            #     # print(f"Epoch {e}:{i}\t loss: {loss.item()}")
+            #     writer.add_scalar(scalar_name, loss.item(), i)
         writer.add_scalar('loss', sum(loss_list)/len(loss_list), e)
         save_checkpoint(e, vae_model, vae_opt, 'pretrained/vae_model')
             
 if __name__ == "__main__":
     epoch = 50
     batch_size = 6
-    vae_model = VAE(1,1).to(device)
+    vae_model = VAE(26,26).to(device)
     optimizer = torch.optim.Adam(vae_model.parameters(), lr=1e-3)
-    ds = CarlaTopDownDataset('C:\\dataset')
-    # ds = CarlaTopDownDataset('test\\data')
+    # ds = CarlaTopDownDataset('C:\\dataset')
+    ds = CarlaTopDownDataset('test\\data',onehot=True)
     model_path = latest_model_path('pretrained/vae_model')
     if model_path:
         checkpoint = torch.load(model_path)
