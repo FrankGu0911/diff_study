@@ -50,28 +50,9 @@ vae_model = VAE(26,26).to(device)
 model = torch.load('pretrained/vae_model/vae_model_29.pth')['model_state_dict']
 vae_model.load_state_dict(model)
 
-ds = CarlaTopDownDataset('test/data')
-ds_no_onehot = CarlaTopDownDataset('test/data',onehot=False)
-# print((ds[0][0]*256).char())
-# image = ds[0][0]
-# print(image.shape)
-# image_np = (torch.cat((image,image,image))*torch.tensor(25)).permute(1, 2, 0).numpy().astype(np.uint8)
-# print(image_np[0][0])
-# image_neo = vae_model(image.unsqueeze(0).to(device))[0]
-# # print(image_neo[0].shape)
-# image_neo = torch.cat((image_neo,image_neo,image_neo),dim=1).squeeze(0)
-# # print(image_neo.shape)
-# image_neo = image_neo.permute(1, 2, 0)
-# image_neo_show = (image_neo.detach()*25).cpu().clone().numpy().astype(np.uint8)
+ds = CarlaTopDownDataset('E:/dataset')
+ds_no_onehot = CarlaTopDownDataset('E:/dataset',onehot=False)
 
-# # print(image_neo_show.shape)
-# # image_neo_show = cv2.cvtColor(image_neo_show, cv2.COLOR_GRAY2RGB)
-# image_neo_show = cvt_rgb_seg(image_neo_show)
-# image_np = cvt_rgb_seg(image_np)
-# cv2.imshow('test',image_neo_show)
-# cv2.imshow('test1',image_np)
-# cv2.waitKey(0)
-# print(image_neo_show.max())
 for i,(image,_) in enumerate(ds):
     image_np = ds_no_onehot[i][0]
     image_np = (torch.cat((image_np,image_np,image_np))*torch.tensor(25)).permute(1, 2, 0).numpy().astype(np.uint8)
