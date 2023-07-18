@@ -1,4 +1,5 @@
 import torch,sys,os,logging,re
+from torch.cuda.amp import autocast, GradScaler
 sys.path.append('.')
 sys.path.append('./models')
 sys.path.append('./dataset')
@@ -53,12 +54,13 @@ def vae_train(cur_epoch,vae_model,vae_opt,train_loader,val_loader,epoch):
         train_loss_list = []
         for (x, _) in train_loop:
             x = x.to(device)
-            vae_opt.zero_grad()
-            con_x, mu, logvar = vae_model(x)
-            loss = vae_loss(x, con_x, mu, logvar)
-            loss.backward()
-            vae_opt.step()
-            train_loss_list.append(loss.item())
+            with autocast():
+                vae_opt.zero_grad()
+                con_x, mu, logvar = vae_model(x)
+                loss = vae_loss(x, con_x, mu, logvar)
+                loss.backward()
+                vae_opt.step()
+                train_loss_list.append(loss.item())
             # if i % 10 == 0:
             #     # print(f"Epoch {e}:{i}\t loss: {loss.item()}")
             #     writer.add_scalar(scalar_name, loss.item(), i)
@@ -73,15 +75,17 @@ def vae_train(cur_epoch,vae_model,vae_opt,train_loader,val_loader,epoch):
                 loss = vae_loss(x, con_x, mu, logvar)
                 val_loss_list.append(loss.item())
         writer.add_scalar('val_loss', sum(val_loss_list)/len(val_loss_list), e)
-        save_checkpoint(e, vae_model, vae_opt, 'pretrained/vae_model')
+        save_checkpoint(e, vae_model, vae_opt, 'pretrained/test')
             
 if __name__ == "__main__":
-    epoch = 50
-    batch_size = 7
+    epoch = 30
+    batch_size = 8
     vae_model = VAE(26,26).to(device)
     optimizer = torch.optim.Adam(vae_model.parameters(), lr=1e-3)
-    train_ds = CarlaTopDownDataset('E:/dataset',onehot=True,weathers=[0,1,2])
-    val_ds = CarlaTopDownDataset('E:/dataset',onehot=True,weathers=[3])
+    # train_ds = CarlaTopDownDataset('test/data',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10])
+    # val_ds = CarlaTopDownDataset('test/data',onehot=True,weathers=[11,12,13])
+    train_ds = CarlaTopDownDataset('E:/dataset',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10])
+    val_ds = CarlaTopDownDataset('E:/dataset',onehot=True,weathers=[11,12,13])
     # ds = CarlaTopDownDataset('test\\data',onehot=True)
     model_path = latest_model_path('pretrained/vae_model')
     if model_path:

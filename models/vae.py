@@ -1,6 +1,6 @@
 import torch
 from resnet import Resnet
-
+from torch.cuda.amp import autocast
 class Pad(torch.nn.Module):
     def forward(self, x):
         return torch.nn.functional.pad(x, (0, 1, 0, 1),
@@ -177,6 +177,7 @@ class VAE(torch.nn.Module):
         h = mean + std * h
         return h
     
+    @autocast()
     def forward(self, x):
         mean, logvar = self.encoder(x)
         x = self.sample(mean, logvar)

@@ -47,11 +47,11 @@ def cvt_rgb_seg(seg:np.ndarray):
     return seg
 
 vae_model = VAE(26,26).to(device)
-model = torch.load('pretrained/vae_model/vae_model_29.pth')['model_state_dict']
+model = torch.load('pretrained/test/vae_model_29.pth')['model_state_dict']
 vae_model.load_state_dict(model)
 
-ds = CarlaTopDownDataset('E:/dataset')
-ds_no_onehot = CarlaTopDownDataset('E:/dataset',onehot=False)
+ds = CarlaTopDownDataset('test/data',weathers=[11])
+ds_no_onehot = CarlaTopDownDataset('test/data',onehot=False,weathers=[11])
 
 for i,(image,_) in enumerate(ds):
     image_np = ds_no_onehot[i][0]
@@ -62,7 +62,7 @@ for i,(image,_) in enumerate(ds):
     image_neo = torch.nn.functional.softmax(image_neo,dim=0)
     image_neo = torch.argmax(image_neo,dim=0).unsqueeze(0)
     image_neo = (torch.cat((image_neo,image_neo,image_neo))).permute(1, 2, 0).cpu().numpy().astype(np.uint8)
-    print(image_neo.shape)
+    # print(image_neo.shape)
     
     # image_neo = torch.cat((image_neo,image_neo,image_neo),dim=1).squeeze(0)
     # image_neo = image_neo.permute(1, 2, 0)
