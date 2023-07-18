@@ -52,15 +52,17 @@ def vae_train(cur_epoch,vae_model,vae_opt,train_loader,val_loader,epoch):
         vae_model.train()
         train_loop = tqdm(train_loader,desc="Train Epoch %d" %e, total=len(train_loader))
         train_loss_list = []
+        scaler = GradScaler()
         for (x, _) in train_loop:
             x = x.to(device)
+            vae_opt.zero_grad()
             with autocast():
-                vae_opt.zero_grad()
                 con_x, mu, logvar = vae_model(x)
                 loss = vae_loss(x, con_x, mu, logvar)
-                loss.backward()
-                vae_opt.step()
-                train_loss_list.append(loss.item())
+            scaler.scale(loss).backward()
+            scaler.step(vae_opt)
+            scaler.update()
+            train_loss_list.append(loss.item())
             # if i % 10 == 0:
             #     # print(f"Epoch {e}:{i}\t loss: {loss.item()}")
             #     writer.add_scalar(scalar_name, loss.item(), i)
