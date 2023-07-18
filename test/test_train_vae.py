@@ -52,16 +52,20 @@ def vae_train(cur_epoch,vae_model,vae_opt,train_loader,val_loader,epoch):
         vae_model.train()
         train_loop = tqdm(train_loader,desc="Train Epoch %d" %e, total=len(train_loader))
         train_loss_list = []
-        scaler = GradScaler()
+        # scaler = GradScaler()
         for (x, _) in train_loop:
             x = x.to(device)
             vae_opt.zero_grad()
-            with autocast():
-                con_x, mu, logvar = vae_model(x)
-                loss = vae_loss(x, con_x, mu, logvar)
-            scaler.scale(loss).backward()
-            scaler.step(vae_opt)
-            scaler.update()
+            # torch.autograd.set_detect_anomaly(True)
+            # with autocast(enabled=False):
+            con_x, mu, logvar = vae_model(x)
+            loss = vae_loss(x, con_x, mu, logvar)
+            # scaler.scale(loss).backward()
+            # scaler.step(vae_opt)
+            # scaler.update()
+            loss.backward()
+            vae_opt.step()
+            # tqdm.write(f"Epoch {e}:\t loss: {loss.item()}")
             train_loss_list.append(loss.item())
             # if i % 10 == 0:
             #     # print(f"Epoch {e}:{i}\t loss: {loss.item()}")
