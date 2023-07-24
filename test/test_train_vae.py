@@ -68,13 +68,13 @@ def vae_train(cur_epoch,vae_model,vae_opt,train_loader,val_loader,epoch):
             # scaler.scale(loss).backward()
             # scaler.step(vae_opt)
             # scaler.update()
+            if torch.isnan(loss):
+                tqdm.write(f"Epoch {e}:\t loss NAN")
             loss.backward()
             vae_opt.step()
             # tqdm.write(f"Epoch {e}:\t loss: {loss.item()}")
             train_loss_list.append(loss.item())
-            # if i % 10 == 0:
-            #     # print(f"Epoch {e}:{i}\t loss: {loss.item()}")
-            #     writer.add_scalar(scalar_name, loss.item(), i)
+
         writer.add_scalar('train_loss', sum(train_loss_list)/len(train_loss_list), e)
         vae_model.eval()
         val_loop = tqdm(val_loader,desc="Valid Epoch %d" %e, total=len(val_loader))
