@@ -98,8 +98,8 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(vae_model.parameters(), lr=1e-3)
     # train_ds = CarlaTopDownDataset('test/data',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10])
     # val_ds = CarlaTopDownDataset('test/data',onehot=True,weathers=[11,12,13])
-    train_ds = CarlaTopDownDataset('/home/frank/code/dataset',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10])
-    val_ds = CarlaTopDownDataset('/home/frank/code/dataset',onehot=True,weathers=[11,12,13])
+    train_ds = CarlaTopDownDataset('/home/frank/code/dataset',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10],base_weight=0.1,diff_weight=2)
+    val_ds = CarlaTopDownDataset('/home/frank/code/dataset',onehot=True,weathers=[11,12,13],base_weight=0.1,diff_weight=2)
     # ds = CarlaTopDownDataset('test\\data',onehot=True)
     model_path = os.path.join("pretrained",TRAIN_NAME)
     if not os.path.exists(model_path):

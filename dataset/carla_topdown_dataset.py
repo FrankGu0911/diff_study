@@ -11,6 +11,7 @@ class CarlaTopDownDataset(BaseIODataset):
         weathers=[0,1, 3, 6, 8],
         towns=[1,2,3],
         onehot=True,
+        base_weight = 1,
         diff_weight = 100
         ):
         super().__init__(root)
@@ -19,6 +20,7 @@ class CarlaTopDownDataset(BaseIODataset):
         pattern = re.compile('weather-(\d+).*town(\d\d)')
         self.route_frames = []
         self.onehot = onehot
+        self.base_weight = base_weight
         self.diff_weight = diff_weight
         for line in dataset_indexs:
             if len(line.split()) != 2:
@@ -57,10 +59,11 @@ class CarlaTopDownDataset(BaseIODataset):
         dtype = label.dtype
         shape = label.shape
         ones = torch.eye(N)
+        ones = ones * self.base_weight
         important = [4,19,25]
         for i in important:
             ones[i][i] = self.diff_weight
-        ones[6][6] = 10
+        ones[6][6] = max(self.base_weight,self.diff_weight/10)
         onehot = ones.index_select(0, label.int().view(-1)).reshape(*shape, N).to(dtype).squeeze(0).permute(2,0,1)
         return onehot
     
