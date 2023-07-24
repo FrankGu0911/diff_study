@@ -1,17 +1,22 @@
 import torch,sys,os,logging,re
-from torch.cuda.amp import autocast, GradScaler
+# from torch.cuda.amp import autocast, GradScaler
 sys.path.append('.')
 sys.path.append('./models')
 sys.path.append('./dataset')
 # print(sys.path)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 from torch.utils.tensorboard import SummaryWriter
-writer = SummaryWriter(log_dir='log/vae_one_hot')
+TRAIN_NAME = "vae_one_hot"
+# path exist
+log_path = os.path.join("log",TRAIN_NAME)
+if not os.path.exists(log_path):
+    os.makedirs(log_path)
+writer = SummaryWriter(log_dir=log_path)
 from tqdm import tqdm
 
 from models.vae import VAE
 from dataset.carla_topdown_dataset import CarlaTopDownDataset
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 def save_checkpoint(epoch:int,model,opt,path):
     check_point = {
         "epoch": epoch,
@@ -81,21 +86,27 @@ def vae_train(cur_epoch,vae_model,vae_opt,train_loader,val_loader,epoch):
                 loss = vae_loss(x, con_x, mu, logvar)
                 val_loss_list.append(loss.item())
         writer.add_scalar('val_loss', sum(val_loss_list)/len(val_loss_list), e)
-        save_checkpoint(e, vae_model, vae_opt, 'pretrained/test')
+        model_path = os.path.join("pretrained",TRAIN_NAME)
+        if not os.path.exists(model_path):
+            os.makedirs(model_path)
+        save_checkpoint(e, vae_model, vae_opt, model_path)
             
 if __name__ == "__main__":
     epoch = 30
-    batch_size = 8
+    batch_size = 6
     vae_model = VAE(26,26).to(device)
     optimizer = torch.optim.Adam(vae_model.parameters(), lr=1e-3)
     # train_ds = CarlaTopDownDataset('test/data',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10])
     # val_ds = CarlaTopDownDataset('test/data',onehot=True,weathers=[11,12,13])
-    train_ds = CarlaTopDownDataset('E:/dataset',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10])
-    val_ds = CarlaTopDownDataset('E:/dataset',onehot=True,weathers=[11,12,13])
+    train_ds = CarlaTopDownDataset('/home/frank/code/dataset',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10])
+    val_ds = CarlaTopDownDataset('/home/frank/code/dataset',onehot=True,weathers=[11,12,13])
     # ds = CarlaTopDownDataset('test\\data',onehot=True)
-    model_path = latest_model_path('pretrained/vae_model')
-    if model_path:
-        checkpoint = torch.load(model_path)
+    model_path = os.path.join("pretrained",TRAIN_NAME)
+    if not os.path.exists(model_path):
+        os.makedirs(model_path)
+    model = latest_model_path(model_path)
+    if model:
+        checkpoint = torch.load(model)
         vae_model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         cur_epoch = checkpoint['epoch'] + 1

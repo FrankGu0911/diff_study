@@ -57,7 +57,7 @@ class CarlaTopDownDataset(BaseIODataset):
         dtype = label.dtype
         shape = label.shape
         ones = torch.eye(N)
-        important = [4,19]
+        important = [4,19,25]
         for i in important:
             ones[i][i] = self.diff_weight
         ones[6][6] = 10
