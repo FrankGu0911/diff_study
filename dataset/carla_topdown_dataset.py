@@ -60,7 +60,7 @@ class CarlaTopDownDataset(BaseIODataset):
         shape = label.shape
         ones = torch.eye(N)
         ones = ones * self.base_weight
-        important = [4,19,25]
+        important = [4,19,23]
         for i in important:
             ones[i][i] = self.diff_weight
         ones[6][6] = max(self.base_weight,self.diff_weight/10)

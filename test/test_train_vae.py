@@ -1,5 +1,5 @@
 import torch,sys,os,logging,re
-# from torch.cuda.amp import autocast, GradScaler
+from torch.cuda.amp import autocast, GradScaler
 sys.path.append('.')
 sys.path.append('./models')
 sys.path.append('./dataset')
@@ -57,23 +57,25 @@ def vae_train(cur_epoch,vae_model,vae_opt,train_loader,val_loader,epoch):
         vae_model.train()
         train_loop = tqdm(train_loader,desc="Train Epoch %d" %e, total=len(train_loader))
         train_loss_list = []
-        # scaler = GradScaler()
+        scaler = GradScaler()
         for (x, _) in train_loop:
             x = x.to(device)
             vae_opt.zero_grad()
             # torch.autograd.set_detect_anomaly(True)
-            # with autocast(enabled=False):
-            con_x, mu, logvar = vae_model(x)
-            loss = vae_loss(x, con_x, mu, logvar)
-            # scaler.scale(loss).backward()
-            # scaler.step(vae_opt)
-            # scaler.update()
+            with autocast():
+                con_x, mu, logvar = vae_model(x)
+                loss = vae_loss(x, con_x, mu, logvar)
             if torch.isnan(loss):
                 tqdm.write(f"Epoch {e}:\t loss NAN")
-            loss.backward()
-            vae_opt.step()
+            else:
+                train_loss_list.append(loss.item())
+            scaler.scale(loss).backward()
+            scaler.step(vae_opt)
+            scaler.update()
+            # loss.backward()
+            # vae_opt.step()
             # tqdm.write(f"Epoch {e}:\t loss: {loss.item()}")
-            train_loss_list.append(loss.item())
+            
 
         writer.add_scalar('train_loss', sum(train_loss_list)/len(train_loss_list), e)
         vae_model.eval()
@@ -84,7 +86,10 @@ def vae_train(cur_epoch,vae_model,vae_opt,train_loader,val_loader,epoch):
                 x = x.to(device)
                 con_x, mu, logvar = vae_model(x)
                 loss = vae_loss(x, con_x, mu, logvar)
-                val_loss_list.append(loss.item())
+                if torch.isnan(loss):
+                    tqdm.write(f"Epoch {e}:\t loss NAN")
+                else:
+                    val_loss_list.append(loss.item())
         writer.add_scalar('val_loss', sum(val_loss_list)/len(val_loss_list), e)
         model_path = os.path.join("pretrained",TRAIN_NAME)
         if not os.path.exists(model_path):
@@ -93,14 +98,15 @@ def vae_train(cur_epoch,vae_model,vae_opt,train_loader,val_loader,epoch):
             
 if __name__ == "__main__":
     epoch = 30
-    batch_size = 6
+    batch_size = 1
     vae_model = VAE(26,26).to(device)
-    optimizer = torch.optim.Adam(vae_model.parameters(), lr=1e-3)
-    # train_ds = CarlaTopDownDataset('test/data',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10])
-    # val_ds = CarlaTopDownDataset('test/data',onehot=True,weathers=[11,12,13])
-    train_ds = CarlaTopDownDataset('/home/frank/code/dataset',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10],base_weight=0.1,diff_weight=2)
-    val_ds = CarlaTopDownDataset('/home/frank/code/dataset',onehot=True,weathers=[11,12,13],base_weight=0.1,diff_weight=2)
-    # ds = CarlaTopDownDataset('test\\data',onehot=True)
+    # optimizer = torch.optim.Adam(vae_model.parameters(), lr=1e-4)
+    #adamw
+    optimizer = torch.optim.AdamW(vae_model.parameters(), lr=5e-5)
+    train_ds = CarlaTopDownDataset('test/data',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10],base_weight=1,diff_weight=100)
+    val_ds = CarlaTopDownDataset('test/data',onehot=True,weathers=[11,12,13],base_weight=1,diff_weight=100)
+    # train_ds = CarlaTopDownDataset('/home/frank/code/dataset',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10],base_weight=0.1,diff_weight=2)
+    # val_ds = CarlaTopDownDataset('/home/frank/code/dataset',onehot=True,weathers=[11,12,13],base_weight=0.1,diff_weight=2)
     model_path = os.path.join("pretrained",TRAIN_NAME)
     if not os.path.exists(model_path):
         os.makedirs(model_path)
