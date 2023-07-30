@@ -50,6 +50,10 @@ class CarlaTopDownDataset(BaseIODataset):
         topdown_img = topdown_img.crop(self.calc_crop(tar_x, tar_y))
         topdown_img = (transforms.ToTensor()(topdown_img) * 255).to(torch.uint8)
         if self.onehot:
+            if torch.max(topdown_img) > 25:
+                _logger.debug("Topdown image has value larger than 25: %s %s" % (route_dir, frame_id))
+                # replace with 7
+                topdown_img = torch.where(topdown_img > 25, torch.Tensor([7]).to(torch.uint8), topdown_img)
             topdown_img = self.get_one_hot(topdown_img, 26).to(torch.float32)
         else:
             topdown_img = topdown_img.to(torch.float32) / 25
