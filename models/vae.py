@@ -27,14 +27,14 @@ class Atten(torch.nn.Module):
         #[1, 512, 32, 32]
         x = self.norm(x)
         #[1, 512, 32, 32] -> [1, 512, 1024] -> [1, 1024, 512]
-        x = x.flatten(start_dim=2).transpose(1, 2)
+        x = x.flatten(start_dim=2).transpose(1, 2).contiguous()
         #线性运算,维度不变
         #[1, 1024, 512]
         q = self.q(x)
         k = self.k(x)
         v = self.v(x)
         #[1, 1024, 512] -> [1, 512, 1024]
-        k = k.transpose(1, 2)
+        k = k.transpose(1, 2).contiguous()
         #[1, 1024, 512] * [1, 512, 1024] -> [1, 1024, 1024]
         #0.044194173824159216 = 1 / 512**0.5
         atten = q.bmm(k) * 0.044194173824159216
@@ -51,7 +51,7 @@ class Atten(torch.nn.Module):
         #[1, 1024, 512]
         atten = self.out(atten)
         #[1, 1024, 512] -> [1, 512, 1024] -> [1, 512, 32, 32]
-        atten = atten.transpose(1, 2).reshape(-1, 512, 32, 32)
+        atten = atten.transpose(1, 2).contiguous().reshape(-1, 512, 32, 32)
         #残差连接,维度不变
         #[1, 512, 32, 32]
         atten = atten + res
