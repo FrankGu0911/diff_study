@@ -128,6 +128,7 @@ class VAETrainer:
                     tqdm.write("Loss is NaN!")
                 else:
                     val_loss.append(loss.item())
+                if self.gpu_id == 0:
                     val_loop.set_postfix({"loss":loss.item()})
         if self.gpu_id == 0 and self.writer is not None:
             self.writer.add_scalar("val_loss",sum(val_loss)/len(val_loss),current_epoch)
@@ -135,7 +136,7 @@ class VAETrainer:
     def save_checkpoint(self,epoch:int,path:str):
         state = {
             "epoch":epoch,
-            "model_state_dict":self.model.state_dict(),
+            "model_state_dict":self.model.module.state_dict(),
             "optimizer_state_dict":self.optimizer.state_dict()
         }
         CheckPath(path)
@@ -147,8 +148,9 @@ class VAETrainer:
         for epoch in range(current_epoch,max_epoch):
             self.train_one_epoch(epoch)
             self.val_one_epoch(epoch)
-        if self.gpu_id == 0:
-            self.save_checkpoint(epoch,self.model_save_path)
+            if self.gpu_id == 0:
+                logging.info('Saving model Epoch {}'.format(epoch))
+                self.save_checkpoint(epoch,self.model_save_path)
             
 if __name__ == "__main__":
     ddp_setup()
