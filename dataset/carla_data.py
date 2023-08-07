@@ -1,6 +1,11 @@
 import os
 import re
 import logging
+import json
+import torch
+import numpy as np
+from PIL import Image
+from torchvision.transforms import ToTensor,Resize,InterpolationMode,CenterCrop,Normalize,Compose
 load_list = {
     "seg_right": "%04d.png",
     "seg_left": "%04d.png",
@@ -14,65 +19,173 @@ load_list = {
 
 class CarlaData():
     def __init__(
-        self, path: str, 
+        self, 
+        path: str, 
         idx: int, 
-        with_lidar: bool = False, 
-        with_seg: bool = False, 
-        with_depth: bool = False,
-        with_rear: bool = False,
-        rgb_merged: bool = True
+        is_rgb_merged: bool = True,
         ):
         self.root_path = path
         self.idx = idx
-        self.with_lidar = with_lidar
-        self.with_seg = with_seg
-        self.with_depth = with_depth
-        self.with_rear = with_rear
-        self.rgb_merged = rgb_merged
-        if not self._CheckData():
-            raise ValueError("Data not found")
-
-    def _CheckData(self):
-        return self._CheckRGBData() and self._CheckOtherData()
-
-    def _CheckOtherData(self):
-        for key in load_list:
-            if (not self.with_lidar) and "lidar" in key:
-                logging.debug(f"Skip lidar data at {key}")
-                continue
-            if (not self.with_seg) and "seg" in key:
-                logging.debug(f"Skip seg data at {key}")
-                continue
-            if (not self.with_depth) and "depth" in key:
-                logging.debug(f"Skip depth data at {key}")
-                continue
-            if (not self.with_rear) and "rear" in key:
-                logging.debug(f"Skip rear data at {key}")
-                continue
-            path = os.path.join(self.root_path, key, load_list[key] % self.idx)
-            if not os.path.exists(path):
-                logging.error("Data %s not found" % path)
-                return False
-        return True
+        self._image_front = None
+        self._image_left = None
+        self._image_right = None
+        self._image_rear = None
+        self._image_far = None
+        self._seg_front = None
+        self._seg_left = None
+        self._seg_right = None
+        self._depth_front = None
+        self._depth_left = None
+        self._depth_right = None
+        self._lidar = None
+        self._lidar_2d = None
+        self._measurements = None
+        self._is_rgb_merged = is_rgb_merged
+        self._rgb_merged = None
     
-    def _CheckRGBData(self):
-        check_dict = {}
-        if self.rgb_merged:
-            check_dict["rgb_full"] = "%04d.jpg" % self.idx
-        else:
-            check_dict["rgb_right"] = "%04d.jpg" % self.idx
-            check_dict["rgb_left"] = "%04d.jpg" % self.idx
-            check_dict["rgb_front"] = "%04d.jpg" % self.idx
-        if self.with_rear:
-            check_dict["rgb_rear"] = "%04d.jpg" % self.idx
-        for key in check_dict:
-            path = os.path.join(self.root_path, key, check_dict[key])
-            if not os.path.exists(path):
-                logging.error("Data %s not found" % path)
-                return False
-        return True
+    def __repr__(self) -> str:
+        return "%d at %s" % (self.idx, self.root_path)
+
+    def __str__(self) -> str:
+        return "%d at %s" % (self.idx, self.root_path)
+
+    def _LoadImage(self, name: str, idx: int, ext: str='jpg'):
+        path = os.path.join(self.root_path, name, "%04d.%s" % (idx, ext))
+        if not os.path.exists(path):
+            logging.error(f"File {path} does not exist")
+            raise FileNotFoundError(f"File {path} does not exist")
+        logging.debug(f"Load image from {path}")
+        return Image.open(path)
+
+    def _LoadJson(self, name: str, idx: int):
+        path = os.path.join(self.root_path, name, "%04d.json" % idx)
+        if not os.path.exists(path):
+            logging.error(f"File {path} does not exist")
+            raise FileNotFoundError(f"File {path} does not exist")
+        logging.debug(f"Load json from {path}")
+        return json.load(open(path, "r"))
+
+    def _LoadNpy(self, name: str, idx: int):
+        path = os.path.join(self.root_path, name, "%04d.npy" % idx)
+        if not os.path.exists(path):
+            logging.error(f"File {path} does not exist")
+            raise FileNotFoundError(f"File {path} does not exist")
+        logging.debug(f"Load npy from {path}")
+        return np.load(path)
+
+    @property
+    def image_front(self):
+        if self._image_front is None:
+            if self._is_rgb_merged:
+                if self._rgb_merged is None:
+                    self._rgb_merged = self._LoadImage("rgb_full", self.idx)
+                logging.debug(f"Crop image_front from rgb_full")
+                self._image_front = self._rgb_merged.crop((0, 0, 800, 600))
+            else:
+                self._image_front = self._LoadImage("rgb_front", self.idx)
+        return ToTensor()(self._image_front).unsqueeze(0)
+    
+    @property
+    def image_left(self):
+        if self._image_left is None:
+            if self._is_rgb_merged:
+                if self._rgb_merged is None:
+                    self._rgb_merged = self._LoadImage("rgb_full", self.idx)
+                logging.debug(f"Crop image_left from rgb_full")
+                self._image_left = self._rgb_merged.crop((0, 600, 800, 1200))
+            else:
+                self._image_left = self._LoadImage("rgb_left", self.idx)
+        return ToTensor()(self._image_left).unsqueeze(0)
+
+    @property
+    def image_right(self):
+        if self._image_right is None:
+            if self._is_rgb_merged:
+                if self._rgb_merged is None:
+                    self._rgb_merged = self._LoadImage("rgb_full", self.idx)
+                logging.debug(f"Crop image_right from rgb_full")
+                self._image_right = self._rgb_merged.crop((0, 1200, 800, 1800))
+            else:
+                self._image_right = self._LoadImage("rgb_right", self.idx)
+        return ToTensor()(self._image_right).unsqueeze(0)
+    
+    @property
+    def image_far(self):
+        if self._image_far is None:
+            if self._is_rgb_merged:
+                if self._rgb_merged is None:
+                    self._rgb_merged = self._LoadImage("rgb_full", self.idx)
+                logging.debug(f"Crop image_far from rgb_full")
+                self._image_far = self._rgb_merged.crop((200, 150, 600, 450))
+            else:
+                self._image_far = self._LoadImage("rgb_far", self.idx)
+        return Resize((600,800),interpolation=InterpolationMode.BICUBIC)(ToTensor()(self._image_far)).unsqueeze(0)
+
+    @property
+    def image_rear(self):
+        if self._image_rear is None:
+            self._image_rear = self._LoadImage("rgb_rear", self.idx)
+        return ToTensor()(self._image_rear).unsqueeze(0)
+    
+    @property
+    def image_full(self):
+        return torch.cat((self.image_front, self.image_left, self.image_right,self.image_far), dim=0)
+
+    @property
+    def seg_front(self):
+        if self._seg_front is None:
+            self._seg_front = self._LoadImage("seg_front", self.idx, "png")
+        return self._seg_front
+    
+    @property
+    def seg_left(self):
+        if self._seg_left is None:
+            self._seg_left = self._LoadImage("seg_left", self.idx, "png")
+        return self._seg_left
+
+    @property
+    def seg_right(self):
+        if self._seg_right is None:
+            self._seg_right = self._LoadImage("seg_right", self.idx, "png")
+        return self._seg_right
+    
+    @property
+    def depth_front(self):
+        if self._depth_front is None:
+            self._depth_front = self._LoadImage("depth_front", self.idx, "png")
+        return ToTensor()(self._depth_front)
+    
+    @property
+    def depth_left(self):
+        if self._depth_left is None:
+            self._depth_left = self._LoadImage("depth_left", self.idx, "png")
+        return ToTensor()(self._depth_left)
+    
+    @property
+    def depth_right(self):
+        if self._depth_right is None:
+            self._depth_right = self._LoadImage("depth_right", self.idx, "png")
+        return ToTensor()(self._depth_right)
+    
+    @property
+    def lidar(self):
+        if self._lidar is None:
+            self._lidar = self._LoadNpy("lidar", self.idx)
+        return self._lidar
+    
+    @property
+    def lidar_2d(self):
+        #TODO: lidar_to_histogram_features
+        pass
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    data = CarlaData("C:\\dataset\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 45)
-    # print(data._CheckData())
+    data = CarlaData("E:\\dataset\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 45)
+    print(data.image_full)
+    preprocess = Compose([
+            Resize(224, interpolation=InterpolationMode.BICUBIC),
+            CenterCrop(224),
+            Normalize([0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711]),
+        ])
+    print(preprocess(data.image_full).shape)
