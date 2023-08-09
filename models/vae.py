@@ -1,11 +1,52 @@
 import torch
-from resnet import Resnet
 from torch.cuda.amp import autocast
 class Pad(torch.nn.Module):
     def forward(self, x):
         return torch.nn.functional.pad(x, (0, 1, 0, 1),
                                        mode='constant',
                                        value=0)
+
+class Resnet(torch.nn.Module):
+    def __init__(self, dim_in, dim_out):
+        super().__init__()
+        self.s = torch.nn.Sequential(
+            torch.nn.GroupNorm(num_groups=32,
+                               num_channels=dim_in,
+                               eps=1e-6,
+                               affine=True),
+            torch.nn.SiLU(),
+            torch.nn.Conv2d(dim_in,
+                            dim_out,
+                            kernel_size=3,
+                            stride=1,
+                            padding=1),
+            torch.nn.GroupNorm(num_groups=32,
+                               num_channels=dim_out,
+                               eps=1e-6,
+                               affine=True),
+            torch.nn.SiLU(),
+            torch.nn.Conv2d(dim_out,
+                            dim_out,
+                            kernel_size=3,
+                            stride=1,
+                            padding=1),
+        )
+        self.res = None
+        if dim_in != dim_out:
+            self.res = torch.nn.Conv2d(dim_in,
+                                       dim_out,
+                                       kernel_size=1,
+                                       stride=1,
+                                       padding=0)
+    def forward(self, x):
+        #x -> [1, dim_in, resx, resy]
+        res = x
+        if self.res:
+            #[1, dim_in, resx, resy] -> [1, dim_in, resx, resy]
+            res = self.res(x)
+        #[1, dim_in, resx, resy] -> [1, dim_in, resx, resy]
+        return res + self.s(x)
+
 
 class Atten(torch.nn.Module):
     # single head no mask
@@ -186,5 +227,8 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = VAE(26, 26).to(device)
     x = torch.randn(1, 26, 256, 256).to(device)
-    y = model(x)
-    print(y[0].shape, y[1].shape, y[2].shape)
+    # y = model(x)
+    # print(y[0].shape, y[1].shape, y[2].shape)
+    mean, logvar = model.encoder(x)
+    y = model.sample(mean, logvar)
+    print(y.shape)
