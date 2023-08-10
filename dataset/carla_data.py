@@ -44,10 +44,10 @@ class CarlaData():
         self._rgb_merged = None
     
     def __repr__(self) -> str:
-        return "%d at %s" % (self.idx, self.root_path)
+        return "Data: %d at %s" % (self.idx, self.root_path)
 
     def __str__(self) -> str:
-        return "%d at %s" % (self.idx, self.root_path)
+        return "Data: %d at %s" % (self.idx, self.root_path)
 
     def _LoadImage(self, name: str, idx: int, ext: str='jpg'):
         path = os.path.join(self.root_path, name, "%04d.%s" % (idx, ext))

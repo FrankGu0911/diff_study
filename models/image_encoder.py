@@ -70,12 +70,9 @@ class ImageEncoder(torch.nn.Module):
         # image -> [bs, 4, 3, 600, 800]
         # get the bs
         image = image.reshape(-1, 3, 600, 800)
-        print(image.shape)
         image = self.preprocess(image.to(self.device))
         features = self.clip_encoder.encode_image(image)
         features = features.detach().float().reshape(-1,4, 32, 24)
-        print(features.shape)
-        # features = features
         features = self.head(features).reshape(-1, self.latent_dim, 32*24)
         return features
     

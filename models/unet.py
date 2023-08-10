@@ -311,6 +311,9 @@ class UNet(torch.nn.Module):
         #time -> [1]
         #----in----
         #[1, 4, 64, 64] -> [1, 320, 64, 64]
+        print(out_vae.shape)
+        print(out_encoder.shape)
+        print(time.shape)
         out_vae = self.in_vae(out_vae)
         def get_time_embed(t):
             #-9.210340371976184 = -math.log(10000)
@@ -418,7 +421,7 @@ class UNet(torch.nn.Module):
     
 if __name__ == '__main__':
     net = UNet()
-    x = torch.randn(2, 4, 32, 32)
-    hint = torch.randn(2, 77, 768)
+    x = torch.randn(1, 4, 32, 32)
+    hint = torch.randn(1, 77, 768)
     y = net(x,hint,torch.LongTensor([0]))
     print(y.shape)

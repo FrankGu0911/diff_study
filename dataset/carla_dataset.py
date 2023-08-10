@@ -1,6 +1,7 @@
 import os,re,logging,torch
 from torch.utils.data import Dataset,DataLoader
 from carla_data import CarlaData
+from carla_label import CarlaLabel
 _logger = logging.getLogger(__name__)
 
 class CarlaDataset(Dataset):
@@ -43,18 +44,20 @@ class CarlaDataset(Dataset):
     def __getitem__(self, idx):
         route_dir, frame_id = self.route_frames[idx]
         data = CarlaData(route_dir, frame_id)
-        label = ''
+        label = CarlaLabel(route_dir, frame_id)
         return (data, label)
     
-def image_collate_fn(batch):
-    data = torch.cat([data.image_full.unsqueeze(0) for (data, label) in batch], dim=0)
-    label = ''
-    return (data, label)
+    @staticmethod
+    def image2topdown_collate_fn(batch):
+        data = torch.cat([data.image_full.unsqueeze(0) for (data, label) in batch], dim=0)
+        label = torch.cat([label.topdown_onehot.unsqueeze(0) for (data, label) in batch], dim=0)
+        return (data, label)
 
 
 if __name__ == '__main__':
     dataset = CarlaDataset("E:\\dataset")
-    dataloader = DataLoader(dataset, batch_size=8,shuffle=True, collate_fn=image_collate_fn)
+    dataloader = DataLoader(dataset, batch_size=8,shuffle=True, collate_fn=CarlaDataset.image2topdown_collate_fn)
     for (data, label) in dataloader:
         print(data.shape)
+        print(label.shape)
         break
