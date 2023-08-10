@@ -21,7 +21,7 @@ from models.unet import UNet
 from models.image_encoder import ImageEncoder
 from dataset.carla_dataset import CarlaDataset
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-def save_checkpoint(epoch:int,model,opt,path,name=TRAIN_NAME):
+def save_checkpoint(epoch:int,model,opt,path,name=TRAIN_NAME,replace=False):
     check_point = {
         "epoch": epoch,
         "model_state_dict": model.state_dict(),
@@ -32,7 +32,13 @@ def save_checkpoint(epoch:int,model,opt,path,name=TRAIN_NAME):
     model_path = os.path.join(path, name)
     if not os.path.exists(model_path):
         os.makedirs(model_path)
-    torch.save(check_point, os.path.join(model_path, f"{name}_{epoch}.pth"))
+    if replace:
+        model_full_path = os.path.join(model_path, f"{name}.pth")
+        if os.path.exists(model_full_path):
+            os.remove(model_full_path)
+        torch.save(check_point, os.path.join(model_path, f"{name}.pth"))
+    else:
+        torch.save(check_point, os.path.join(model_path, f"{name}_{epoch}.pth"))
 
 def latest_model_path(path,name=TRAIN_NAME):
     if not os.path.exists(path):
@@ -143,6 +149,6 @@ if __name__ == '__main__':
             scaler.step(image_encoder_optimizer)
             scaler.update()
             train_loop.set_postfix(loss=np.mean(train_loss_list))
-        save_checkpoint(e,unet_model,unet_optimizer,"pretrained","unet")
-        save_checkpoint(e,image_encoder,image_encoder_optimizer,"pretrained","image_encoder")
+        save_checkpoint(e,unet_model,unet_optimizer,"pretrained","unet",replace=True)
+        save_checkpoint(e,image_encoder,image_encoder_optimizer,"pretrained","image_encoder",replace=True)
 
