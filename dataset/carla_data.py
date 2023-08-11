@@ -119,7 +119,7 @@ class CarlaData():
                 self._image_far = self._rgb_merged.crop((200, 150, 600, 450))
             else:
                 self._image_far = self._LoadImage("rgb_far", self.idx)
-        return Resize((600,800),interpolation=InterpolationMode.BICUBIC)(ToTensor()(self._image_far)).unsqueeze(0)
+        return Resize((600,800),interpolation=InterpolationMode.NEAREST)(ToTensor()(self._image_far)).unsqueeze(0)
 
     @property
     def image_rear(self):
@@ -184,7 +184,7 @@ if __name__ == "__main__":
     data = CarlaData("E:\\dataset\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 45)
     print(data.image_full)
     preprocess = Compose([
-            Resize(224, interpolation=InterpolationMode.BICUBIC),
+            Resize(224, interpolation=InterpolationMode.BILINEAR),
             CenterCrop(224),
             Normalize([0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711]),
         ])
