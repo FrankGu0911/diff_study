@@ -61,7 +61,7 @@ class ImageEncoder(torch.nn.Module):
             torch.nn.Conv2d(64, self.latent_dim, 3, stride=1, padding=1),
         ).to(device)
         self.preprocess = transforms.Compose([
-            transforms.Resize(224, interpolation=transforms.InterpolationMode.BICUBIC),
+            transforms.Resize(224, interpolation=transforms.InterpolationMode.BILINEAR),
             transforms.CenterCrop(224),
             transforms.Normalize([0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711]),
         ])

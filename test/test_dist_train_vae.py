@@ -108,7 +108,9 @@ class VAETrainer:
                 loss.backward()
                 self.optimizer.step()
             if self.gpu_id == 0:
-                train_loop.set_postfix({"loss":loss.item()})
+                if len(train_loss) != 0:
+                    avg_loss = sum(train_loss)/len(train_loss)
+                train_loop.set_postfix({"loss":avg_loss})
         if self.gpu_id == 0 and self.writer is not None:
             self.writer.add_scalar("train_loss",sum(train_loss)/len(train_loss),current_epoch)
 
@@ -158,7 +160,7 @@ if __name__ == "__main__":
     device = torch.device("cuda:%d" % int(os.environ["LOCAL_RANK"]))
     vae_model = VAE(26,26).to(device)
     optimizer = torch.optim.AdamW(vae_model.parameters(), lr=1e-4)
-    train_ds = CarlaTopDownDataset('../dataset-remote',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10],towns=[1,2,3,4,5,6,7,10],base_weight=1,diff_weight=100)
+    train_ds = CarlaTopDownDataset('../dataset-remote',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],base_weight=1,diff_weight=100)
     val_ds = CarlaTopDownDataset('../dataset-remote',onehot=True,weathers=[11,12,13],towns=[1,2,3],base_weight=1,diff_weight=100)
     model_path = os.path.join("pretrained",args.train_name)
     CheckPath(model_path)
