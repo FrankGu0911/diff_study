@@ -23,9 +23,11 @@ class CarlaData():
         path: str, 
         idx: int, 
         is_rgb_merged: bool = True,
+        gen_feature: bool = False,
         ):
         self.root_path = path
         self.idx = idx
+        self.gen_feature = gen_feature
         self._image_front = None
         self._image_left = None
         self._image_right = None
@@ -42,6 +44,8 @@ class CarlaData():
         self._measurements = None
         self._is_rgb_merged = is_rgb_merged
         self._rgb_merged = None
+        self._clip_feature = None
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     def __repr__(self) -> str:
         return "Data: %d at %s" % (self.idx, self.root_path)
@@ -178,14 +182,38 @@ class CarlaData():
         #TODO: lidar_to_histogram_features
         pass
 
+    @property
+    def clip_feature(self):
+        if self._clip_feature is None:
+            if os.path.exists(os.path.join(self.root_path, "clip_feature", "%04d.pt" % self.idx)):
+                self._clip_feature = torch.load(os.path.join(self.root_path, "clip_feature", "%04d.pt" % self.idx))
+            else:
+                logging.debug(f"Clip feature file {os.path.join(self.root_path, 'clip_feature', '%04d.pt' % self.idx)} does not exist")
+                if not os.path.exists(os.path.join(self.root_path, "clip_feature")):
+                    os.makedirs(os.path.join(self.root_path, "clip_feature"))
+                if self.gen_feature:
+                    import clip
+                    clip_encoder,_ = clip.load("ViT-L/14", device=self.device)
+                    preprocess = Compose([
+                        Resize(224, interpolation=InterpolationMode.BILINEAR),
+                        CenterCrop(224),
+                        Normalize([0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711]),
+                    ])
+                    clip_encoder.eval()
+                    with torch.no_grad():
+                        self._clip_feature = clip_encoder.encode_image(preprocess(self.image_full.to(self.device)))
+                    torch.save(self._clip_feature, os.path.join(self.root_path, "clip_feature", "%04d.pt" % self.idx))
+        return self._clip_feature
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    data = CarlaData("E:\\dataset\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 45)
-    print(data.image_full)
-    preprocess = Compose([
-            Resize(224, interpolation=InterpolationMode.BILINEAR),
-            CenterCrop(224),
-            Normalize([0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711]),
-        ])
-    print(preprocess(data.image_full).shape)
+    # data = CarlaData("E:\\dataset\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 45)
+    data = CarlaData("test/data/weather-0/data/routes_town01_long_w0_06_23_01_05_07", 45)
+    # print(data.image_full)
+    # preprocess = Compose([
+    #         Resize(224, interpolation=InterpolationMode.BILINEAR),
+    #         CenterCrop(224),
+    #         Normalize([0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711]),
+    #     ])
+    # print(preprocess(data.image_full).shape)
+    print(data.clip_feature.shape)

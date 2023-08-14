@@ -11,15 +11,20 @@ class CarlaLabel():
         important_seg: list = [4,19,23],
         base_weight: int = 1,
         diff_weight: int = 100,
+        gen_feature: bool = True,
+        vae_model_path: str = None,
         ):
         self.root_path = path
         self.index = index
         self._topdown = None
         self._topdown_onehot = None
+        self._vae_feature = None
         self.important_seg = important_seg
         self.base_weight = base_weight
         self.diff_weight = diff_weight
-
+        self.gen_feature = gen_feature
+        self.vae_model_path = vae_model_path
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     def __repr__(self) -> str:
         return "Label: %d at %s" % (self.index, self.root_path)
@@ -69,7 +74,6 @@ class CarlaLabel():
                 _logger.debug("Topdown image has value larger than 25: %s %s" % (self.root_path, self.index))
                 # replace with 7
                 self._topdown = torch.where(self._topdown > 25, torch.Tensor([7]).to(torch.uint8), self._topdown)
-
         return self._topdown
     
     @property
@@ -78,7 +82,34 @@ class CarlaLabel():
             self._topdown_onehot = self.get_one_hot(self.topdown, 26).to(torch.float32)
         return self._topdown_onehot
     
+    @property
+    def vae_feature(self):
+        if self._vae_feature is None:
+            if os.path.exists(os.path.join(self.root_path, "vae_feature", "%04d.pt" % self.index)):
+                self._vae_feature = torch.load(os.path.join(self.root_path, "vae_feature", "%04d.pt" % self.index))
+            else:
+                logging.debug("Vae Feature %s does not exist" % os.path.join(self.root_path, "vae_feature", "%04d.pt" % self.index))
+                if self.gen_feature:
+                    import sys
+                    sys.path.append('.')
+                    from models.vae import VAE
+                    vae = VAE(26,26).to(self.device)
+                    vae.load_state_dict(torch.load(self.vae_model_path)['model_state_dict'])
+                    vae.eval()
+                    with torch.no_grad():
+                        mean, logvar = vae.encoder(self.topdown_onehot.unsqueeze(0).to(self.device))
+                        feature = vae.sample(mean, logvar).squeeze(0)
+                        if not os.path.exists(os.path.join(self.root_path, "vae_feature")):
+                            os.mkdir(os.path.join(self.root_path, "vae_feature"))
+                        torch.save(feature, os.path.join(self.root_path, "vae_feature", "%04d.pt" % self.index))
+                        self._vae_feature = feature
+                else:
+                    logging.error("Vae Feature %s does not exist" % os.path.join(self.root_path, "vae_feature", "%04d.pt" % self.index))
+                    raise FileNotFoundError("Vae Feature %s does not exist" % os.path.join(self.root_path, "vae_feature", "%04d.pt" % self.index))
+        return self._vae_feature
+    
 if __name__ == "__main__":
-    a = CarlaLabel("test/data/dataset/weather-0/data/routes_town01_long_w0_06_23_00_31_21", 0)
+    a = CarlaLabel("test/data/weather-0/data/routes_town01_long_w0_06_23_01_05_07", 0,vae_model_path='pretrained/vae_one_hot/vae_model_54.pth')
     print(a.topdown_onehot.shape)
     print(a.topdown.shape)
+    print(a.vae_feature.shape)
