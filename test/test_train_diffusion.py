@@ -1,4 +1,4 @@
-import torch,sys,os,logging,re
+import torch,sys,os,logging,re,time
 import numpy as np
 from torch.cuda.amp import autocast, GradScaler
 from diffusers import PNDMScheduler
@@ -39,6 +39,27 @@ def save_checkpoint(epoch:int,model,opt,path,name=TRAIN_NAME,replace=False):
         torch.save(check_point, os.path.join(model_path, f"{name}.pth"))
     else:
         torch.save(check_point, os.path.join(model_path, f"{name}_{epoch}.pth"))
+
+def save_all_checkpoint_in_one_file(epoch:int,unet_model,unet_opt,image_encoder_model,image_encoder_opt,path,replace=False):
+    check_point = {
+        "epoch": epoch,
+        "unet_model_state_dict": unet_model.state_dict(),
+        "unet_optimizer_state_dict": unet_opt.state_dict(),
+        "image_encoder_model_state_dict": image_encoder_model.state_dict(),
+        "image_encoder_optimizer_state_dict": image_encoder_opt.state_dict(),
+    }
+    if not os.path.exists(path):
+        os.makedirs(path)
+    model_path = os.path.join(path, TRAIN_NAME)
+    if not os.path.exists(model_path):
+        os.makedirs(model_path)
+    if replace:
+        model_full_path = os.path.join(model_path, f"{TRAIN_NAME}.pth")
+        if os.path.exists(model_full_path):
+            os.remove(model_full_path)
+        torch.save(check_point, os.path.join(model_path, f"{TRAIN_NAME}.pth"))
+    else:
+        torch.save(check_point, os.path.join(model_path, f"{TRAIN_NAME}_{epoch}.pth"))
 
 def latest_model_path(path,name=TRAIN_NAME):
     if not os.path.exists(path):
@@ -92,9 +113,9 @@ def load_model(model,optimizer,path,model_name,required=False):
 
 if __name__ == '__main__':
     epochs = 5
-    batch_size = 1
+    batch_size = 2
     dataset = CarlaDataset("test\\data",weathers=[0])
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=CarlaDataset.image2topdown_collate_fn)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True,num_workers=8,pin_memory=True, collate_fn=CarlaDataset.image2topdown_collate_fn)
     vae_model = VAE(26,26).to(device)
     unet_model = UNet().to(device)
     image_encoder = ImageEncoder(77,device).to(device)
