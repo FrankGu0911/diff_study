@@ -13,7 +13,7 @@ class CarlaDataset(Dataset):
             topdown_onehot=True,
             topdown_base_weight=1,
             topdown_diff_weight=100,
-            gen_feature=True,
+            gen_feature=False,
             vae_model_path=None,
     ):
         super().__init__()
@@ -62,18 +62,32 @@ class CarlaDataset(Dataset):
         label = torch.cat([label.topdown_onehot.unsqueeze(0)
                           for (data, label) in batch], dim=0)
         return (data, label)
+    
+    @staticmethod
+    def clip_feature2vae_feature_collate_fn(batch):
+        try:
+            data = torch.cat([data.clip_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0)
+            label = torch.cat([label.vae_feature.unsqueeze(0)
+                              for (data, label) in batch], dim=0)
+        except:
+            for (data, label) in batch:
+                print('clip_feature:',data.clip_feature.shape)
+                print('vae_feature:',label.vae_feature.shape)
+        return (data, label)
 
 
 if __name__ == '__main__':
     # logging.basicConfig(level=logging.DEBUG)
-    # dataset = CarlaDataset("E:\\dataset")
-    dataset = CarlaDataset("test/data",weathers=[0],vae_model_path='pretrained/vae_one_hot/vae_model_54.pth')
+    dataset = CarlaDataset("E:\\dataset")
+    print(len(dataset))
+    # dataset = CarlaDataset("test/data",weathers=[0],vae_model_path='pretrained/vae_one_hot/vae_model_54.pth')
     # dataloader = DataLoader(dataset, batch_size=8,shuffle=True, collate_fn=CarlaDataset.image2topdown_collate_fn)
     # for (data, label) in dataloader:
     #     print(data.shape)
     #     print(label.shape)
     #     break
-    from tqdm import tqdm
-    for i in tqdm(dataset):
-        i[0].clip_feature
-        i[1].vae_feature
+    # from tqdm import tqdm
+    # for i in tqdm(dataset):
+    #     i[0].clip_feature
+    #     i[1].vae_feature

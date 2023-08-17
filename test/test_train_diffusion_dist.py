@@ -1,4 +1,6 @@
 import torch,os,sys,logging,re,argparse
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
@@ -22,6 +24,11 @@ def CheckPath(path:str):
     if not os.path.exists(path):
         os.makedirs(path)
 
+def ddp_setup():
+    # initialize the process group
+    init_process_group("nccl")
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+
 def latest_model_path(path):
     if not os.path.exists(path):
         return ''
@@ -39,8 +46,9 @@ def latest_model_path(path):
             return os.path.join(path, f"diffusion_model_{max(epoch_list)}.pth")
 
 if __name__ == "__main__":
+    ddp_setup()
     args = SetArgs()
-    device = torch.device("cuda:0")
+    device = torch.device("cuda:%d" % int(os.environ["LOCAL_RANK"]))
     unet_model = UNet().to(device)
     unet_optimizer = torch.optim.AdamW(unet_model.parameters(), lr=1e-5,
                               betas=(0.9, 0.999),
@@ -52,14 +60,16 @@ if __name__ == "__main__":
                               batch_size=args.batch_size,
                               shuffle=False,
                               num_workers=8,
+                              pin_memory=True,
                               collate_fn=CarlaDataset.clip_feature2vae_feature_collate_fn,
-                              )
+                              sampler=DistributedSampler(train_ds))
     val_loader = DataLoader(val_ds,
                             batch_size=args.batch_size,
                             shuffle=False,
                             num_workers=8,
+                            pin_memory=True,
                             collate_fn=CarlaDataset.clip_feature2vae_feature_collate_fn,
-                            )
+                            sampler=DistributedSampler(val_ds))
     model_path = os.path.join("pretrained",'diffusion')
     CheckPath(model_path)
     if args.resume:
@@ -84,5 +94,6 @@ if __name__ == "__main__":
                                 optimizer=unet_optimizer,
                                 autocast=args.autocast,
                                 writer=writer,
-                                model_save_path=model_path,dist=False)
+                                model_save_path=model_path)
     trainer.train(current_epoch,max_epoch=args.epoch)
+    destroy_process_group()

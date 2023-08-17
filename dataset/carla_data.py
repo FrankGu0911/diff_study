@@ -186,7 +186,7 @@ class CarlaData():
     def clip_feature(self):
         if self._clip_feature is None:
             if os.path.exists(os.path.join(self.root_path, "clip_feature", "%04d.pt" % self.idx)):
-                self._clip_feature = torch.load(os.path.join(self.root_path, "clip_feature", "%04d.pt" % self.idx))
+                self._clip_feature = torch.load(os.path.join(self.root_path, "clip_feature", "%04d.pt" % self.idx)).to(torch.float32)
             else:
                 logging.debug(f"Clip feature file {os.path.join(self.root_path, 'clip_feature', '%04d.pt' % self.idx)} does not exist")
                 if not os.path.exists(os.path.join(self.root_path, "clip_feature")):
@@ -207,8 +207,8 @@ class CarlaData():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    # data = CarlaData("E:\\dataset\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 45)
-    data = CarlaData("test/data/weather-0/data/routes_town01_long_w0_06_23_01_05_07", 45)
+    data = CarlaData("E:\\dataset\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 45)
+    # data = CarlaData("test/data/weather-0/data/routes_town01_long_w0_06_23_01_05_07", 45)
     # print(data.image_full)
     # preprocess = Compose([
     #         Resize(224, interpolation=InterpolationMode.BILINEAR),

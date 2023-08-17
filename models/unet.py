@@ -56,6 +56,47 @@ class Resnet_time_embed(torch.nn.Module):
         x = res + x
         return x
 
+class Resnet(torch.nn.Module):
+    def __init__(self, dim_in, dim_out):
+        super().__init__()
+        self.s = torch.nn.Sequential(
+            torch.nn.GroupNorm(num_groups=32,
+                               num_channels=dim_in,
+                               eps=1e-6,
+                               affine=True),
+            torch.nn.SiLU(),
+            torch.nn.Conv2d(dim_in,
+                            dim_out,
+                            kernel_size=3,
+                            stride=1,
+                            padding=1),
+            torch.nn.GroupNorm(num_groups=32,
+                               num_channels=dim_out,
+                               eps=1e-6,
+                               affine=True),
+            torch.nn.SiLU(),
+            torch.nn.Conv2d(dim_out,
+                            dim_out,
+                            kernel_size=3,
+                            stride=1,
+                            padding=1),
+        )
+        self.res = None
+        if dim_in != dim_out:
+            self.res = torch.nn.Conv2d(dim_in,
+                                       dim_out,
+                                       kernel_size=1,
+                                       stride=1,
+                                       padding=0)
+    def forward(self, x):
+        #x -> [1, dim_in, resx, resy]
+        res = x
+        if self.res:
+            #[1, dim_in, resx, resy] -> [1, dim_in, resx, resy]
+            res = self.res(x)
+        #[1, dim_in, resx, resy] -> [1, dim_in, resx, resy]
+        return res + self.s(x)
+
 class CrossAttention(torch.nn.Module):
 
     def __init__(self, dim_q, dim_kv):
@@ -264,7 +305,12 @@ class UNet(torch.nn.Module):
 
         #in
         self.in_vae = torch.nn.Conv2d(4, 320, kernel_size=3, padding=1)
-
+        self.in_encoder = torch.nn.Sequential(
+            torch.nn.Conv2d(4, 64, 3, stride=1, padding=1),
+            Resnet(64, 64),
+            Resnet(64, 64),
+            torch.nn.Conv2d(64, 77, 3, stride=1, padding=1),
+        )
         self.in_time = torch.nn.Sequential(
             torch.nn.Linear(320, 1280),
             torch.nn.SiLU(),
@@ -306,12 +352,16 @@ class UNet(torch.nn.Module):
         )
 
     def forward(self, out_vae, out_encoder, time):
-        #out_vae -> [1, 4, 64, 64]
-        #out_encoder -> [1, 77, 768]
+        #out_vae -> [1, 4, 32, 32]
+        #out_encoder -> [1, 4, 768]
         #time -> [1]
-        #----in----
-        #[1, 4, 64, 64] -> [1, 320, 64, 64]
+        #----in vae----
+        #[1, 4, 32, 32] -> [1, 320, 32, 32]
         out_vae = self.in_vae(out_vae)
+        #----in encoder----
+        #[1, 4, 768] -> [1, 77, 768]
+        out_encoder = self.in_encoder(out_encoder.reshape(-1,4, 32, 24)).reshape(-1, 77, 32*24)
+
         def get_time_embed(t):
             #-9.210340371976184 = -math.log(10000)
             e = torch.arange(160) * -9.210340371976184 / 160

@@ -90,6 +90,9 @@ class CarlaLabel():
             else:
                 logging.debug("Vae Feature %s does not exist" % os.path.join(self.root_path, "vae_feature", "%04d.pt" % self.index))
                 if self.gen_feature:
+                    if self.vae_model_path is None:
+                        logging.error('Choose to Generate VAE Feature but cannot find model path')
+                        raise FileNotFoundError('Choose to Generate VAE Feature but cannot find model path')
                     import sys
                     sys.path.append('.')
                     from models.vae import VAE
@@ -109,7 +112,8 @@ class CarlaLabel():
         return self._vae_feature
     
 if __name__ == "__main__":
-    a = CarlaLabel("test/data/weather-0/data/routes_town01_long_w0_06_23_01_05_07", 0,vae_model_path='pretrained/vae_one_hot/vae_model_54.pth')
+    # a = CarlaLabel("test/data/weather-0/data/routes_town01_long_w0_06_23_01_05_07", 0,vae_model_path='pretrained/vae_one_hot/vae_model_54.pth')
+    a = CarlaLabel("E:\\dataset\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 45)
     print(a.topdown_onehot.shape)
     print(a.topdown.shape)
     print(a.vae_feature.shape)
