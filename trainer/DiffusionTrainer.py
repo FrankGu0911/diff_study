@@ -63,7 +63,7 @@ class DiffusionTrainer:
             if self.autocast:
                 with autocast():
                     pred = self.model(z_noise,data,noise_step)
-                    loss = self.criterion(pred,label)
+                    loss = self.criterion(pred,noise)
                 if torch.isnan(loss):
                     tqdm.write("Loss is NaN!")
                 else:
@@ -101,14 +101,16 @@ class DiffusionTrainer:
             noise_step = torch.randint(0, 1000, (1, )).long().cuda(self.gpu_id)
             z_noise = self.scheduler.add_noise(label, noise, noise_step)
             with torch.no_grad():
-                pred = self.model(z_noise,label,noise_step)
-                loss = self.criterion(pred,label)
+                pred = self.model(z_noise,data,noise_step)
+                loss = self.criterion(pred,noise)
                 if torch.isnan(loss):
                     tqdm.write("Loss is NaN!")
                 else:
                     val_loss.append(loss.item())
                 if self.gpu_id == 0:
-                    val_loop.set_postfix({"loss":loss.item()})
+                    if len(val_loss) != 0:
+                        avg_loss = sum(val_loss)/len(val_loss)
+                    val_loop.set_postfix({"loss":avg_loss})
         if self.gpu_id == 0 and self.writer is not None:
             self.writer.add_scalar("val_loss",sum(val_loss)/len(val_loss),current_epoch)
 
