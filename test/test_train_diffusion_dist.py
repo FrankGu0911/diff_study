@@ -54,6 +54,7 @@ if __name__ == "__main__":
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
                               eps=1e-8)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=2,T_mult=2,eta_min=1e-6)
     train_ds = CarlaDataset('E:/dataset',weathers=[0,1,2,3,4,5,6,7,8,9,10],towns=[1,2,3,4,5,6,7,10],topdown_base_weight=1,topdown_diff_weight=100)
     val_ds = CarlaDataset('E:/dataset',weathers=[11,12,13],towns=[1,2,3],topdown_base_weight=1,topdown_diff_weight=100)
     train_loader = DataLoader(train_ds,
@@ -74,11 +75,16 @@ if __name__ == "__main__":
     CheckPath(model_path)
     if args.resume:
         model_param = latest_model_path(model_path)
+    else:
+        model_param = ''
     if model_param:
         checkpoint = torch.load(model_param,map_location=device)
         current_epoch = checkpoint["epoch"] + 1
+        scheduler.last_epoch = checkpoint["epoch"]
         unet_model.load_state_dict(checkpoint["model_state_dict"])
         unet_optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        checkpoint = None
+        torch.cuda.empty_cache()
     else:
         current_epoch = 0
     if os.environ["LOCAL_RANK"] == "0":
@@ -92,6 +98,7 @@ if __name__ == "__main__":
                                 train_loader=train_loader,
                                 val_loader=val_loader,
                                 optimizer=unet_optimizer,
+                                lr_scheduler=scheduler,
                                 autocast=args.autocast,
                                 writer=writer,
                                 model_save_path=model_path)

@@ -22,12 +22,14 @@ class VAETrainer:
                  train_loader:torch.utils.data.DataLoader,
                  val_loader:torch.utils.data.DataLoader,
                  optimizer:torch.optim.Optimizer,
+                 lr_scheduler:torch.optim.lr_scheduler=None,
                  autocast:bool=False,
                  writer:SummaryWriter=None,
                  model_save_path:str=None):
         self.gpu_id = int(os.environ["LOCAL_RANK"])
         self.model = vae_model.cuda(self.gpu_id)
         self.optimizer = optimizer
+        self.lr_scheduler = lr_scheduler
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.model = DDP(self.model,device_ids=[self.gpu_id])
@@ -44,7 +46,7 @@ class VAETrainer:
             train_loop = self.train_loader
         train_loss = []
         scaler = GradScaler()
-        for (x,_) in train_loop:
+        for i,(x,_) in enumerate(train_loop):
             x = x.cuda(self.gpu_id)
             self.optimizer.zero_grad()
             if self.autocast:
@@ -67,6 +69,7 @@ class VAETrainer:
                     train_loss.append(loss.item())
                 loss.backward()
                 self.optimizer.step()
+            self.lr_scheduler.step(current_epoch+i/len(self.train_loader))
             if self.gpu_id == 0:
                 if len(train_loss) != 0:
                     avg_loss = sum(train_loss)/len(train_loss)

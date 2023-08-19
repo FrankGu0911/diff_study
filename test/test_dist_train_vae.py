@@ -56,6 +56,7 @@ if __name__ == "__main__":
     device = torch.device("cuda:%d" % int(os.environ["LOCAL_RANK"]))
     vae_model = VAE(26,26).to(device)
     optimizer = torch.optim.AdamW(vae_model.parameters(), lr=1e-4)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,T_0=2,T_mult=2,eta_min=1e-6)
     train_ds = CarlaTopDownDataset('../dataset-remote',onehot=True,weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],base_weight=1,diff_weight=100)
     val_ds = CarlaTopDownDataset('../dataset-remote',onehot=True,weathers=[11,12,13],towns=[1,2,3],base_weight=1,diff_weight=100)
     model_path = os.path.join("pretrained",args.train_name)
@@ -92,6 +93,7 @@ if __name__ == "__main__":
                             train_loader=train_loader,
                             val_loader=val_loader,
                             optimizer=optimizer,
+                            lr_scheduler=scheduler,
                             autocast=args.autocast,
                             writer=writer,
                             model_save_path=model_path)

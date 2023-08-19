@@ -116,6 +116,8 @@ if __name__ == "__main__":
         vae_model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         cur_epoch = checkpoint['epoch'] + 1
+        checkpoint = None
+        torch.cuda.empty_cache()
     else:
         cur_epoch = 0
     # cur_epoch = 0
