@@ -73,7 +73,7 @@ class VAETrainer:
             if self.gpu_id == 0:
                 if len(train_loss) != 0:
                     avg_loss = sum(train_loss)/len(train_loss)
-                train_loop.set_postfix({"loss":avg_loss})
+                train_loop.set_postfix({"loss":avg_loss,'lr':"%.2e" %self.optimizer.param_groups[0]['lr']})
         if self.gpu_id == 0 and self.writer is not None:
             self.writer.add_scalar("train_loss",sum(train_loss)/len(train_loss),current_epoch)
 
