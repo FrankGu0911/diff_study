@@ -47,16 +47,16 @@ if __name__ == "__main__":
                               weight_decay=0.01,
                               eps=1e-8)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=2,T_mult=2,eta_min=1e-6)
-    train_ds = CarlaDataset('E:/dataset',weathers=[0,1,3,4,7,10],towns=[1,2,3,4,5,6,7,10],topdown_base_weight=1,topdown_diff_weight=100)
-    val_ds = CarlaDataset('E:/dataset',weathers=[2,5,6,8,9],towns=[1,2,3],topdown_base_weight=1,topdown_diff_weight=100)
+    train_ds = CarlaDataset('E:/dataset',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5],topdown_base_weight=1,topdown_diff_weight=100)
+    val_ds = CarlaDataset('E:/dataset',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[6,7,10],topdown_base_weight=1,topdown_diff_weight=100)
     train_loader = DataLoader(train_ds,
                               batch_size=args.batch_size,
-                              shuffle=False,
+                              shuffle=True,
                               collate_fn=CarlaDataset.clip_feature2vae_feature_collate_fn,
                               )
     val_loader = DataLoader(val_ds,
                             batch_size=args.batch_size,
-                            shuffle=False,
+                            shuffle=True,
                             collate_fn=CarlaDataset.clip_feature2vae_feature_collate_fn,
                             )
     model_path = os.path.join("pretrained",'diffusion')

@@ -69,12 +69,12 @@ class CarlaLabel():
     def topdown(self):
         if self._topdown is None:
             self._topdown = self._LoadImage("topdown", self.index, "png").crop(self.calc_crop(256,256))
-            self._topdown = (transforms.ToTensor()(self._topdown) * 255).to(torch.uint8)
-            if torch.max(self.topdown) > 25:
-                _logger.debug("Topdown image has value larger than 25: %s %s" % (self.root_path, self.index))
-                # replace with 7
-                self._topdown = torch.where(self._topdown > 25, torch.Tensor([7]).to(torch.uint8), self._topdown)
-        return self._topdown
+        topdown = (transforms.ToTensor()(self._topdown) * 255).to(torch.uint8)
+        if torch.max(topdown) > 25:
+            _logger.debug("Topdown image has value larger than 25: %s %s" % (self.root_path, self.index))
+            # replace with 7
+            topdown = torch.where(topdown > 25, torch.Tensor([7]).to(torch.uint8), topdown)
+        return topdown
     
     @property
     def topdown_onehot(self):
