@@ -64,8 +64,7 @@ class DiffusionTrainer:
             # data[1] -> (batch_size, 3, 256, 256)
             # label -> (batch_size, 4, 32, 32)
             if self.with_lidar:
-                data = data[0].cuda(self.gpu_id)
-                lidar = data[1].cuda(self.gpu_id)
+                data, lidar = data[0].cuda(self.gpu_id),data[1].cuda(self.gpu_id)
             else:
                 data = data.cuda(self.gpu_id)
             label = label.cuda(self.gpu_id)
@@ -113,8 +112,7 @@ class DiffusionTrainer:
         val_loss = []
         for (data,label) in val_loop:
             if self.with_lidar:
-                data = data[0].cuda(self.gpu_id)
-                lidar = data[1].cuda(self.gpu_id)
+                data, lidar = data[0].cuda(self.gpu_id),data[1].cuda(self.gpu_id)
             else:
                 data = data.cuda(self.gpu_id)
             label = label.cuda(self.gpu_id)

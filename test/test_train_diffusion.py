@@ -49,7 +49,7 @@ if __name__ == "__main__":
                               eps=1e-8)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=2,T_mult=2,eta_min=1e-6)
     train_ds = CarlaDataset('E:/dataset',weathers=[0],towns=[1,2,3,4,5],topdown_base_weight=1,topdown_diff_weight=100)
-    val_ds = CarlaDataset('E:/dataset',weathers=[0],towns=[1],topdown_base_weight=1,topdown_diff_weight=100)
+    val_ds = CarlaDataset('E:/dataset',weathers=[0],towns=[10],topdown_base_weight=1,topdown_diff_weight=100)
     if args.lidar:
         train_loader = DataLoader(train_ds,
                                 batch_size=args.batch_size,
@@ -93,7 +93,10 @@ if __name__ == "__main__":
         current_epoch = 0
     if os.environ["LOCAL_RANK"] == "0":
         logging.info(f"Start at epoch{current_epoch}")
-        log_path = os.path.join("log",'diffusion')
+        if args.lidar:
+            log_path = os.path.join("log",'diffusion_lidar')
+        else:
+            log_path = os.path.join("log",'diffusion')
         CheckPath(log_path)
         writer = SummaryWriter(log_dir=log_path)
     else:

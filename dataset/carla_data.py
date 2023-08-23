@@ -203,8 +203,8 @@ class CarlaData():
         below_features = self.splat_points(below)
         above_features = self.splat_points(above)
         total_features = below_features + above_features
-        features = np.stack([below_features, above_features, total_features], axis=-1)
-        features = np.transpose(features, (2, 0, 1)).astype(np.float32)
+        features = np.stack([below_features, above_features, total_features], axis=-1).astype(np.float32)
+        # features = np.transpose(features, (2, 0, 1)).astype(np.float32)
         return features
 
     @property
