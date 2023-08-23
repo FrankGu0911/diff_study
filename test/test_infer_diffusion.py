@@ -1,4 +1,4 @@
-import torch,sys,cv2
+import torch,sys,cv2,time
 import numpy as np
 from PIL import Image
 sys.path.append('.')
@@ -56,7 +56,7 @@ vae_model.load_state_dict(vae_param)
 vae_model.eval()
 
 UNet_model = UNet().to(device)
-UNet_param = torch.load('pretrained/diffusion/diffusion_model_6.pth')['model_state_dict']
+UNet_param = torch.load('pretrained/diffusion/diffusion_model_8.pth')['model_state_dict']
 UNet_model.load_state_dict(UNet_param)
 UNet_model.eval()
 scheduler = PNDMScheduler(
@@ -107,19 +107,22 @@ for (data,label) in ds:
                 preprocess(image_right), 
                 preprocess(image_far)), dim=0)
         pos_clip_feature = clip_encoder.encode_image(image_full_tensor).unsqueeze(0)
-        neg_clip_feature = clip_encoder.encode_image(torch.zeros_like(image_full_tensor)).unsqueeze(0)
-        out_clip_feature = torch.cat((neg_clip_feature,pos_clip_feature),dim=0).to(torch.float32)
+        # neg_clip_feature = clip_encoder.encode_image(torch.zeros_like(image_full_tensor)).unsqueeze(0)
+        # out_clip_feature = torch.cat((neg_clip_feature,pos_clip_feature),dim=0).to(torch.float32)
+        out_clip_feature = pos_clip_feature.to(torch.float32)
         out_vae = torch.randn(1,4,32,32).to(device)
-        scheduler.set_timesteps(50, device=device)
-        
-        for time in scheduler.timesteps:
-            noise = torch.cat((out_vae,out_vae),dim=0)
-            noise = scheduler.scale_model_input(noise, time)
-            pred_noise = UNet_model(out_vae=noise,out_encoder=out_clip_feature,time=time)
-            pred_noise = pred_noise[1]
-            # pred_noise = pred_noise[0] + 7.5 * (pred_noise[1] - pred_noise[0])
-            out_vae = scheduler.step(pred_noise, time,out_vae).prev_sample
-        out_vae = 1 / 0.18215 * out_vae
+        scheduler.set_timesteps(100, device=device)
+        start_time = time.time()
+        for cur_time in scheduler.timesteps:
+            # noise = torch.cat((out_vae,out_vae),dim=0)
+            noise = out_vae
+            noise = scheduler.scale_model_input(noise, cur_time)
+            pred_noise = UNet_model(out_vae=noise,out_encoder=out_clip_feature,time=cur_time)
+            # pred_noise = pred_noise[1]
+            # pred_noise = pred_noise[0] + 2 * (pred_noise[1] - pred_noise[0])
+            out_vae = scheduler.step(pred_noise, cur_time,out_vae).prev_sample
+        print("Time: %.4f"%(time.time()-start_time))
+        # out_vae = 1 / 0.18215 * out_vae
         out_vae = vae_model.decoder(out_vae).squeeze(0)
         out_vae = torch.nn.functional.softmax(out_vae,dim=0)
         out_vae = torch.argmax(out_vae,dim=0).unsqueeze(0)

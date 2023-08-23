@@ -18,6 +18,7 @@ def SetArgs():
     parser.add_argument("--batch_size",type=int,default=8)
     parser.add_argument("--epoch",type=int,default=35)
     parser.add_argument("--autocast",action="store_true",default=False)
+    parser.add_argument("--lidar",action="store_true",default=False)
     return parser.parse_args()
 
 def CheckPath(path:str):
@@ -50,28 +51,51 @@ if __name__ == "__main__":
     args = SetArgs()
     device = torch.device("cuda:%d" % int(os.environ["LOCAL_RANK"]))
     unet_model = UNet().to(device)
-    unet_optimizer = torch.optim.AdamW(unet_model.parameters(), lr=1e-5,
+    unet_optimizer = torch.optim.AdamW(unet_model.parameters(),lr=5e-5,
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
                               eps=1e-8)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=2,T_mult=2,eta_min=1e-6)
     train_ds = CarlaDataset('E:/dataset',weathers=[0,1,2,3,4,5,6,7,8,9,10],towns=[1,2,3,4,5,6,7,10],topdown_base_weight=1,topdown_diff_weight=100)
     val_ds = CarlaDataset('E:/dataset',weathers=[11,12,13],towns=[1,2,3],topdown_base_weight=1,topdown_diff_weight=100)
-    train_loader = DataLoader(train_ds,
-                              batch_size=args.batch_size,
-                              shuffle=False,
-                              num_workers=8,
-                              pin_memory=True,
-                              collate_fn=CarlaDataset.clip_feature2vae_feature_collate_fn,
-                              sampler=DistributedSampler(train_ds))
-    val_loader = DataLoader(val_ds,
-                            batch_size=args.batch_size,
-                            shuffle=False,
-                            num_workers=8,
-                            pin_memory=True,
-                            collate_fn=CarlaDataset.clip_feature2vae_feature_collate_fn,
-                            sampler=DistributedSampler(val_ds))
-    model_path = os.path.join("pretrained",'diffusion')
+    if args.lidar:
+        train_loader = DataLoader(train_ds,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                pin_memory=True,
+                                num_workers=8,
+                                collate_fn=CarlaDataset.clip_lidar_feature2vae_feature_collate_fn,
+                                sampler=DistributedSampler(train_ds)
+                                )
+        val_loader = DataLoader(val_ds,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                pin_memory=True,
+                                num_workers=8,
+                                collate_fn=CarlaDataset.clip_lidar_feature2vae_feature_collate_fn,
+                                sampler=DistributedSampler(val_ds)
+                                )
+    else:
+        train_loader = DataLoader(train_ds,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                pin_memory=True,
+                                num_workers=8,
+                                collate_fn=CarlaDataset.clip_feature2vae_feature_collate_fn,
+                                sampler=DistributedSampler(train_ds)
+                                )
+        val_loader = DataLoader(val_ds,
+                                batch_size=args.batch_size,
+                                shuffle=False,
+                                pin_memory=True,
+                                num_workers=8,
+                                collate_fn=CarlaDataset.clip_feature2vae_feature_collate_fn,
+                                sampler=DistributedSampler(val_ds)
+                                )
+    if args.lidar:
+        model_path = os.path.join("pretrained",'diffusion_lidar')
+    else:
+        model_path = os.path.join("pretrained",'diffusion')
     CheckPath(model_path)
     if args.resume:
         model_param = latest_model_path(model_path)
@@ -101,6 +125,8 @@ if __name__ == "__main__":
                                 lr_scheduler=scheduler,
                                 autocast=args.autocast,
                                 writer=writer,
-                                model_save_path=model_path)
+                                model_save_path=model_path,
+                                dist=True,
+                                with_lidar=args.lidar)
     trainer.train(current_epoch,max_epoch=args.epoch)
     destroy_process_group()

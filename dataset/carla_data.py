@@ -175,12 +175,44 @@ class CarlaData():
     def lidar(self):
         if self._lidar is None:
             self._lidar = self._LoadNpy("lidar", self.idx)
-        return self._lidar
+        return ToTensor()(self._lidar)
     
+    def splat_points(self,point_cloud):
+        # 256 x 256 grid
+        pixels_per_meter = 8
+        hist_max_per_pixel = 5
+        x_meters_max = 16
+        y_meters_max = 32
+        xbins = np.linspace(
+            -2 * x_meters_max,
+            2 * x_meters_max + 1,
+            2 * x_meters_max * pixels_per_meter + 1,
+        )
+        ybins = np.linspace(-y_meters_max, 0, y_meters_max * pixels_per_meter + 1)
+        hist = np.histogramdd(point_cloud[..., :2], bins=(xbins, ybins))[0]
+        hist[hist > hist_max_per_pixel] = hist_max_per_pixel
+        overhead_splat = hist / hist_max_per_pixel
+        return overhead_splat
+
+    def lidar_to_histogram_features(self,lidar, crop=256):
+        """
+        Convert LiDAR point cloud into 2-bin histogram over 256x256 grid
+        """
+        below = lidar[lidar[..., 2] <= -2.0]
+        above = lidar[lidar[..., 2] > -2.0]
+        below_features = self.splat_points(below)
+        above_features = self.splat_points(above)
+        total_features = below_features + above_features
+        features = np.stack([below_features, above_features, total_features], axis=-1)
+        features = np.transpose(features, (2, 0, 1)).astype(np.float32)
+        return features
+
     @property
-    def lidar_2d(self):
+    def lidar_2d_feature(self):
         #TODO: lidar_to_histogram_features
-        pass
+        if self._lidar_2d is None:
+            self._lidar_2d = self.lidar_to_histogram_features(self.lidar)
+        return ToTensor()(self._lidar_2d)
 
     @property
     def clip_feature(self):
@@ -207,13 +239,5 @@ class CarlaData():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    data = CarlaData("E:\\dataset\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 45)
-    # data = CarlaData("test/data/weather-0/data/routes_town01_long_w0_06_23_01_05_07", 45)
-    # print(data.image_full)
-    # preprocess = Compose([
-    #         Resize(224, interpolation=InterpolationMode.BILINEAR),
-    #         CenterCrop(224),
-    #         Normalize([0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711]),
-    #     ])
-    # print(preprocess(data.image_full).shape)
-    print(data.clip_feature.shape)
+    data = CarlaData("E:\\dataset\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 56)
+    print(data.lidar_2d_feature.shape)

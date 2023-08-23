@@ -75,6 +75,23 @@ class CarlaDataset(Dataset):
                 print('clip_feature:',data.clip_feature.shape)
                 print('vae_feature:',label.vae_feature.shape)
         return (data, label)
+    
+    @staticmethod
+    def clip_lidar_feature2vae_feature_collate_fn(batch):
+        try:
+            data = []
+            data.append(torch.cat([data.clip_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            data.append(torch.cat([data.lidar_2d_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            label = torch.cat([label.vae_feature.unsqueeze(0)
+                              for (data, label) in batch], dim=0)
+        except Exception as e:
+            for (data, label) in batch:
+                print('clip_feature:',data.clip_feature.shape)
+                print('vae_feature:',label.vae_feature.shape)
+            raise e
+        return (data, label)
 
 
 if __name__ == '__main__':

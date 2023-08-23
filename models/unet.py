@@ -300,17 +300,34 @@ class UpBlock(torch.nn.Module):
     
 class UNet(torch.nn.Module):
 
-    def __init__(self):
+    def __init__(self,with_lidar=False):
         super().__init__()
-
+        self.with_lidar = with_lidar
+        #lidar
+        if self.with_lidar:
+            self.lidar_in_net = torch.nn.Sequential(
+                torch.nn.Conv2d(3, 64, 3, stride=2, padding=1),
+                torch.nn.Conv2d(64, 64, 3, stride=2, padding=1),
+                Resnet(64, 64),
+                Resnet(64, 64),
+                torch.nn.Conv2d(64, 4, 3, stride=2, padding=1),
+                torch.nn.Linear(32,24)
+            )
+            self.in_encoder = torch.nn.Sequential(
+                torch.nn.Conv2d(8, 64, 3, stride=1, padding=1),
+                Resnet(64, 64),
+                Resnet(64, 64),
+                torch.nn.Conv2d(64, 77, 3, stride=1, padding=1),
+            )
+        else:
+            self.in_encoder = torch.nn.Sequential(
+                torch.nn.Conv2d(4, 64, 3, stride=1, padding=1),
+                Resnet(64, 64),
+                Resnet(64, 64),
+                torch.nn.Conv2d(64, 77, 3, stride=1, padding=1),
+            )
         #in
         self.in_vae = torch.nn.Conv2d(4, 320, kernel_size=3, padding=1)
-        self.in_encoder = torch.nn.Sequential(
-            torch.nn.Conv2d(4, 64, 3, stride=1, padding=1),
-            Resnet(64, 64),
-            Resnet(64, 64),
-            torch.nn.Conv2d(64, 77, 3, stride=1, padding=1),
-        )
         self.in_time = torch.nn.Sequential(
             torch.nn.Linear(320, 1280),
             torch.nn.SiLU(),
@@ -351,7 +368,15 @@ class UNet(torch.nn.Module):
             torch.nn.Conv2d(320, 4, kernel_size=3, padding=1),
         )
 
-    def forward(self, out_vae, out_encoder, time):
+    def forward(self, out_vae, out_encoder, time,lidar=None):
+        if self.with_lidar:
+            if lidar is None:
+                raise Exception("lidar is None")
+            #lidar -> [1, 3, 256, 256] -> [1, 4, 32, 24]
+            lidar = self.lidar_in_net(lidar)
+            out_encoder = torch.cat([out_encoder.reshape(-1,4,32,24), lidar], dim=1)
+        else:
+            out_encoder = out_encoder.reshape(-1,4,32,24)
         #out_vae -> [1, 4, 32, 32]
         #out_encoder -> [1, 4, 768]
         #time -> [1]
@@ -360,7 +385,7 @@ class UNet(torch.nn.Module):
         out_vae = self.in_vae(out_vae)
         #----in encoder----
         #[1, 4, 768] -> [1, 77, 768]
-        out_encoder = self.in_encoder(out_encoder.reshape(-1,4, 32, 24)).reshape(-1, 77, 32*24)
+        out_encoder = self.in_encoder(out_encoder).reshape(-1, 77, 32*24)
 
         def get_time_embed(t):
             #-9.210340371976184 = -math.log(10000)
@@ -467,8 +492,5 @@ class UNet(torch.nn.Module):
         return out_vae
     
 if __name__ == '__main__':
-    net = UNet()
-    x = torch.randn(1, 4, 32, 32)
-    hint = torch.randn(1, 77, 768)
-    y = net(x,hint,torch.LongTensor([0]))
-    print(y.shape)
+    net = UNet(with_lidar=False)
+    y = net(torch.rand(4,4,32,32),torch.randn(4, 4, 768),torch.LongTensor([0]))
