@@ -55,8 +55,8 @@ vae_param = torch.load('pretrained/vae_one_hot/vae_model_54.pth')['model_state_d
 vae_model.load_state_dict(vae_param)
 vae_model.eval()
 
-UNet_model = UNet().to(device)
-UNet_param = torch.load('pretrained/diffusion/diffusion_model_8.pth')['model_state_dict']
+UNet_model = UNet(with_lidar=True).to(device)
+UNet_param = torch.load('pretrained/diffusion_lidar/diffusion_model_22.pth',map_location=device)['model_state_dict']
 UNet_model.load_state_dict(UNet_param)
 UNet_model.eval()
 scheduler = PNDMScheduler(
@@ -78,7 +78,7 @@ preprocess = Compose([
                 CenterCrop(224),
                 Normalize([0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711]),
                 ])
-ds = CarlaDataset('test/data',weathers=[0],towns=[1],topdown_base_weight=1,topdown_diff_weight=100)
+ds = CarlaDataset('test/data',weathers=[0],towns=[10],topdown_base_weight=1,topdown_diff_weight=100)
 
 for (data,label) in ds:
     with torch.no_grad():
@@ -106,6 +106,7 @@ for (data,label) in ds:
                 preprocess(image_left), 
                 preprocess(image_right), 
                 preprocess(image_far)), dim=0)
+        lidar = data.lidar_2d_feature.unsqueeze(0).to(device)
         pos_clip_feature = clip_encoder.encode_image(image_full_tensor).unsqueeze(0)
         # neg_clip_feature = clip_encoder.encode_image(torch.zeros_like(image_full_tensor)).unsqueeze(0)
         # out_clip_feature = torch.cat((neg_clip_feature,pos_clip_feature),dim=0).to(torch.float32)
@@ -117,7 +118,7 @@ for (data,label) in ds:
             # noise = torch.cat((out_vae,out_vae),dim=0)
             noise = out_vae
             noise = scheduler.scale_model_input(noise, cur_time)
-            pred_noise = UNet_model(out_vae=noise,out_encoder=out_clip_feature,time=cur_time)
+            pred_noise = UNet_model(out_vae=noise,lidar=lidar,out_encoder=out_clip_feature,time=cur_time)
             # pred_noise = pred_noise[1]
             # pred_noise = pred_noise[0] + 2 * (pred_noise[1] - pred_noise[0])
             out_vae = scheduler.step(pred_noise, cur_time,out_vae).prev_sample

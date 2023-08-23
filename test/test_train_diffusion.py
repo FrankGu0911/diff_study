@@ -42,7 +42,7 @@ def latest_model_path(path):
 if __name__ == "__main__":
     args = SetArgs()
     device = torch.device("cuda:0")
-    unet_model = UNet().to(device)
+    unet_model = UNet(with_lidar=args.lidar).to(device)
     unet_optimizer = torch.optim.AdamW(unet_model.parameters(),lr=5e-5,
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
