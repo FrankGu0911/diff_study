@@ -1,5 +1,61 @@
 import torch
 
+class Pad(torch.nn.Module):
+    def forward(self, x):
+        return torch.nn.functional.pad(x, (0, 1, 0, 1),
+                                       mode='constant',
+                                       value=0)
+
+class Atten(torch.nn.Module):
+    # single head no mask
+    def __init__(self):
+        super().__init__()
+        self.norm = torch.nn.GroupNorm(num_channels=128,
+                                       num_groups=32,
+                                       eps=1e-6,
+                                       affine=True)
+        self.q = torch.nn.Linear(128, 128)
+        self.k = torch.nn.Linear(128, 128)
+        self.v = torch.nn.Linear(128, 128)
+        self.out = torch.nn.Linear(128, 128)
+
+    def forward(self, x):
+        #x -> [1, 128, 32, 32]
+        res = x
+        #norm,维度不变
+        #[1, 128, 32, 32]
+        x = self.norm(x)
+        #[1, 128, 32, 32] -> [1, 128, 1024] -> [1, 1024, 128]
+        x = x.flatten(start_dim=2).transpose(1, 2).contiguous()
+        #线性运算,维度不变
+        #[1, 1024, 128]
+        q = self.q(x)
+        k = self.k(x)
+        v = self.v(x)
+        #[1, 1024, 128] -> [1, 128, 1024]
+        k = k.transpose(1, 2).contiguous()
+        #[1, 1024, 128] * [1, 128, 1024] -> [1, 1024, 1024]
+        #0.044194173824159216 = 1 / 512**0.5
+        atten = q.bmm(k) * 0.044194173824159216
+        #照理来说应该是等价的,但是却有很小的误差
+        # atten = torch.baddbmm(torch.empty(1, 1024, 1024, device=q.device),
+        #                       q,
+        #                       k,
+        #                       beta=0,
+        #                       alpha=0.044194173824159216)
+        atten = torch.softmax(atten, dim=2)
+        #[1, 1024, 1024] * [1, 1024, 512] -> [1, 1024, 512]
+        atten = atten.bmm(v)
+        #线性运算,维度不变
+        #[1, 1024, 512]
+        atten = self.out(atten)
+        #[1, 1024, 512] -> [1, 512, 1024] -> [1, 512, 32, 32]
+        atten = atten.transpose(1, 2).contiguous().reshape(-1, 128, 32, 32)
+        #残差连接,维度不变
+        #[1, 512, 32, 32]
+        atten = atten + res
+        return atten
+
 class Resnet_time_embed(torch.nn.Module):
     def __init__(self, dim_in, dim_out):
         super().__init__()
@@ -306,12 +362,47 @@ class UNet(torch.nn.Module):
         #lidar
         if self.with_lidar:
             self.lidar_in_net = torch.nn.Sequential(
-                torch.nn.Conv2d(3, 64, 3, stride=2, padding=1),
-                torch.nn.Conv2d(64, 64, 3, stride=2, padding=1),
-                Resnet(64, 64),
-                Resnet(64, 64),
-                torch.nn.Conv2d(64, 4, 3, stride=2, padding=1),
-                torch.nn.Linear(32,24)
+                torch.nn.Conv2d(3, 32, 3, stride=1, padding=1),
+                torch.nn.Sequential(
+                    Resnet(32, 32),
+                    Resnet(32, 32),
+                    torch.nn.Sequential(
+                        Pad(),
+                        torch.nn.Conv2d(32, 32, 3, stride=2, padding=0),
+                    ),
+                ),
+                torch.nn.Sequential(
+                    Resnet(32, 64),
+                    Resnet(64, 64),
+                    torch.nn.Sequential(
+                        Pad(),
+                        torch.nn.Conv2d(64, 64, 3, stride=2, padding=0),
+                    ),
+                ),
+                torch.nn.Sequential(
+                    Resnet(64, 128),
+                    Resnet(128, 128),
+                    torch.nn.Sequential(
+                        Pad(),
+                        torch.nn.Conv2d(128, 128, 3, stride=2, padding=0),
+                    ),
+                ),
+                torch.nn.Sequential(
+                    Resnet(128, 128),
+                    Resnet(128, 128),
+                ),
+                torch.nn.Sequential(
+                    Resnet(128, 128),
+                    Atten(),
+                    Resnet(128, 128),
+                ),
+                torch.nn.Sequential(
+                    torch.nn.GroupNorm(num_channels=128, num_groups=32, eps=1e-6),
+                    torch.nn.SiLU(),
+                    torch.nn.Conv2d(128, 4, 3, padding=1),
+                ),
+                torch.nn.Linear(32,24),
+                torch.nn.Conv2d(4, 4, 1),
             )
             self.in_encoder = torch.nn.Sequential(
                 torch.nn.Conv2d(8, 64, 3, stride=1, padding=1),
@@ -492,5 +583,7 @@ class UNet(torch.nn.Module):
         return out_vae
     
 if __name__ == '__main__':
-    net = UNet(with_lidar=False)
-    y = net(torch.rand(4,4,32,32),torch.randn(4, 4, 768),torch.LongTensor([0]))
+    net = UNet(with_lidar=True)
+    y = net(torch.rand(4,4,32,32),torch.randn(4, 4, 768),torch.LongTensor([0]),lidar=torch.randn(4,3,256,256))
+    # y = net.lidar_in_net(torch.randn(4,3,256,256))
+    print(y.shape)
