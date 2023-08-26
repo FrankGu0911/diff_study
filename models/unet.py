@@ -480,10 +480,13 @@ class UNet(torch.nn.Module):
 
         def get_time_embed(t):
             #-9.210340371976184 = -math.log(10000)
+            # if t.shape == torch.Size([]):
+            #     t = t.unsqueeze(0)
             e = torch.arange(160) * -9.210340371976184 / 160
-            e = e.exp().to(t.device) * t
+            e = e.exp().to(t.device) 
+            e = t.unsqueeze(1) * e.unsqueeze(0)
             #[160+160] -> [320] -> [1, 320]
-            e = torch.cat([e.cos(), e.sin()]).unsqueeze(dim=0)
+            e = torch.cat([e.cos(), e.sin()],dim=1)
             return e
 
         #[1] -> [1, 320]
@@ -584,6 +587,6 @@ class UNet(torch.nn.Module):
     
 if __name__ == '__main__':
     net = UNet(with_lidar=True)
-    y = net(torch.rand(4,4,32,32),torch.randn(4, 4, 768),torch.LongTensor([0]),lidar=torch.randn(4,3,256,256))
+    y = net(torch.rand(4,4,32,32),torch.randn(4, 4, 768),torch.LongTensor([0,1,2,3]),lidar=torch.randn(4,3,256,256))
     # y = net.lidar_in_net(torch.randn(4,3,256,256))
     print(y.shape)

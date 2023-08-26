@@ -70,7 +70,7 @@ class DiffusionTrainer:
             label = label.cuda(self.gpu_id)
             self.optimizer.zero_grad()
             noise = torch.randn_like(label)
-            noise_step = torch.randint(0, 1000, (1, )).long().cuda(self.gpu_id)
+            noise_step = torch.randint(0, 1000, (data.shape[0], )).long().cuda(self.gpu_id)
             z_noise = self.scheduler.add_noise(label, noise, noise_step)
             if self.autocast:
                 with autocast():
@@ -87,8 +87,11 @@ class DiffusionTrainer:
                 scaler.step(self.optimizer)
                 scaler.update()
             else:
-                pred = self.model(z_noise,data,noise_step)
-                loss = self.criterion(pred,label)
+                if self.with_lidar:
+                    pred = self.model(z_noise,data,noise_step,lidar)
+                else:
+                    pred = self.model(z_noise,data,noise_step)
+                loss = self.criterion(pred,noise)
                 if torch.isnan(loss):
                     tqdm.write("Loss is NaN!")
                 else:
@@ -117,7 +120,7 @@ class DiffusionTrainer:
                 data = data.cuda(self.gpu_id)
             label = label.cuda(self.gpu_id)
             noise = torch.randn_like(label)
-            noise_step = torch.randint(0, 1000, (1, )).long().cuda(self.gpu_id)
+            noise_step = torch.randint(0, 1000, (data.shape[0], )).long().cuda(self.gpu_id)
             z_noise = self.scheduler.add_noise(label, noise, noise_step)
             with torch.no_grad():
                 if self.with_lidar:

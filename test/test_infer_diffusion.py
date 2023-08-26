@@ -51,12 +51,12 @@ def cvt_rgb_seg(seg:np.ndarray):
     return seg
 
 vae_model = VAE(26,26).to(device)
-vae_param = torch.load('pretrained/vae_one_hot/vae_model_54.pth')['model_state_dict']
+vae_param = torch.load('pretrained/vae_one_hot/vae_model_61.pth')['model_state_dict']
 vae_model.load_state_dict(vae_param)
 vae_model.eval()
 
 UNet_model = UNet(with_lidar=True).to(device)
-UNet_param = torch.load('pretrained/diffusion_lidar/diffusion_model_22.pth',map_location=device)['model_state_dict']
+UNet_param = torch.load('pretrained/diffusion_lidar/diffusion_model_49.pth',map_location=device)['model_state_dict']
 UNet_model.load_state_dict(UNet_param)
 UNet_model.eval()
 scheduler = PNDMScheduler(
@@ -78,9 +78,9 @@ preprocess = Compose([
                 CenterCrop(224),
                 Normalize([0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711]),
                 ])
-ds = CarlaDataset('test/data',weathers=[0],towns=[10],topdown_base_weight=1,topdown_diff_weight=100)
+ds = CarlaDataset('/media/frank/sn640-0/dataset/test-dataset/train',weathers=[0],towns=[10],topdown_base_weight=1,topdown_diff_weight=100)
 
-for (data,label) in ds:
+for i,(data,label) in enumerate(ds):
     with torch.no_grad():
         data.image_front,data.image_left,data.image_right,data.image_far,label.topdown
         image_front = data._image_front
@@ -107,6 +107,9 @@ for (data,label) in ds:
                 preprocess(image_right), 
                 preprocess(image_far)), dim=0)
         lidar = data.lidar_2d_feature.unsqueeze(0).to(device)
+        # neg_lidar = torch.zeros_like(data.lidar_2d_feature.unsqueeze(0)).to(device)
+        # lidar = torch.cat((neg_lidar,lidar),dim=0)
+        vae_feature = label.vae_feature.unsqueeze(0).to(device)
         pos_clip_feature = clip_encoder.encode_image(image_full_tensor).unsqueeze(0)
         # neg_clip_feature = clip_encoder.encode_image(torch.zeros_like(image_full_tensor)).unsqueeze(0)
         # out_clip_feature = torch.cat((neg_clip_feature,pos_clip_feature),dim=0).to(torch.float32)
@@ -115,10 +118,12 @@ for (data,label) in ds:
         scheduler.set_timesteps(100, device=device)
         start_time = time.time()
         for cur_time in scheduler.timesteps:
+            # cur_time_in = torch.cat((cur_time.unsqueeze(0),cur_time.unsqueeze(0)),dim=0)
+            cur_time_in = cur_time.unsqueeze(0)
             # noise = torch.cat((out_vae,out_vae),dim=0)
             noise = out_vae
             noise = scheduler.scale_model_input(noise, cur_time)
-            pred_noise = UNet_model(out_vae=noise,lidar=lidar,out_encoder=out_clip_feature,time=cur_time)
+            pred_noise = UNet_model(out_vae=noise,lidar=lidar,out_encoder=out_clip_feature,time=cur_time_in)
             # pred_noise = pred_noise[1]
             # pred_noise = pred_noise[0] + 2 * (pred_noise[1] - pred_noise[0])
             out_vae = scheduler.step(pred_noise, cur_time,out_vae).prev_sample
@@ -129,8 +134,17 @@ for (data,label) in ds:
         out_vae = torch.argmax(out_vae,dim=0).unsqueeze(0)
         out_vae = (torch.cat((out_vae,out_vae,out_vae))).permute(1, 2, 0).cpu().numpy().astype(np.uint8)
         out_vae = cvt_rgb_seg(out_vae)
+        vae_gt = vae_model.decoder(vae_feature).squeeze(0)
+        vae_gt = torch.nn.functional.softmax(vae_gt,dim=0)
+        vae_gt = torch.argmax(vae_gt,dim=0).unsqueeze(0)
+        vae_gt = (torch.cat((vae_gt,vae_gt,vae_gt))).permute(1, 2, 0).cpu().numpy().astype(np.uint8)
+        vae_gt = cvt_rgb_seg(vae_gt)
         
     cv2.imshow('topdown',out_vae)
+    cv2.imwrite('test/infer/lidar_model_no_lidar/result/%04d.jpg' %i,out_vae)
     cv2.imshow('topdown_gt',topdown_gt)
-    cv2.imshow('result',result)
+    cv2.imwrite('test/infer/lidar_model_no_lidar/gt/%04d.jpg' %i,topdown_gt)
+    cv2.imshow('vae_gt',vae_gt)
+    cv2.imwrite('test/infer/lidar_model_no_lidar/vae_gt/%04d.jpg' %i,vae_gt)
+    # cv2.imshow('result',result)
     cv2.waitKey(1)
