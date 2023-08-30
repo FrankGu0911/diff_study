@@ -24,7 +24,7 @@ class CarlaLabel():
         self.diff_weight = diff_weight
         self.gen_feature = gen_feature
         self.vae_model_path = vae_model_path
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     def __repr__(self) -> str:
         return "Label: %d at %s" % (self.index, self.root_path)
@@ -86,7 +86,7 @@ class CarlaLabel():
     def vae_feature(self):
         if self._vae_feature is None:
             if os.path.exists(os.path.join(self.root_path, "vae_feature", "%04d.pt" % self.index)):
-                self._vae_feature = torch.load(os.path.join(self.root_path, "vae_feature", "%04d.pt" % self.index))
+                self._vae_feature = torch.load(os.path.join(self.root_path, "vae_feature", "%04d.pt" % self.index),map_location='cpu')
             else:
                 logging.debug("Vae Feature %s does not exist" % os.path.join(self.root_path, "vae_feature", "%04d.pt" % self.index))
                 if self.gen_feature:
@@ -96,11 +96,11 @@ class CarlaLabel():
                     import sys
                     sys.path.append('.')
                     from models.vae import VAE
-                    vae = VAE(26,26).to(self.device)
+                    vae = VAE(26,26).to('cuda' if torch.cuda.is_available() else 'cpu')
                     vae.load_state_dict(torch.load(self.vae_model_path)['model_state_dict'])
                     vae.eval()
                     with torch.no_grad():
-                        mean, logvar = vae.encoder(self.topdown_onehot.unsqueeze(0).to(self.device))
+                        mean, logvar = vae.encoder(self.topdown_onehot.unsqueeze(0).to('cuda' if torch.cuda.is_available() else 'cpu'))
                         feature = vae.sample(mean, logvar).squeeze(0)
                         if not os.path.exists(os.path.join(self.root_path, "vae_feature")):
                             os.mkdir(os.path.join(self.root_path, "vae_feature"))

@@ -45,7 +45,7 @@ class CarlaData():
         self._is_rgb_merged = is_rgb_merged
         self._rgb_merged = None
         self._clip_feature = None
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     def __repr__(self) -> str:
         return "Data: %d at %s" % (self.idx, self.root_path)
@@ -218,14 +218,14 @@ class CarlaData():
     def clip_feature(self):
         if self._clip_feature is None:
             if os.path.exists(os.path.join(self.root_path, "clip_feature", "%04d.pt" % self.idx)):
-                self._clip_feature = torch.load(os.path.join(self.root_path, "clip_feature", "%04d.pt" % self.idx)).to(torch.float32)
+                self._clip_feature = torch.load(os.path.join(self.root_path, "clip_feature", "%04d.pt" % self.idx),map_location='cpu').to(torch.float32)
             else:
                 logging.debug(f"Clip feature file {os.path.join(self.root_path, 'clip_feature', '%04d.pt' % self.idx)} does not exist")
                 if not os.path.exists(os.path.join(self.root_path, "clip_feature")):
                     os.makedirs(os.path.join(self.root_path, "clip_feature"))
                 if self.gen_feature:
                     import clip
-                    clip_encoder,_ = clip.load("ViT-L/14", device=self.device)
+                    clip_encoder,_ = clip.load("ViT-L/14", device='cuda' if torch.cuda.is_available() else 'cpu')
                     preprocess = Compose([
                         Resize(224, interpolation=InterpolationMode.BILINEAR),
                         CenterCrop(224),
@@ -233,7 +233,7 @@ class CarlaData():
                     ])
                     clip_encoder.eval()
                     with torch.no_grad():
-                        self._clip_feature = clip_encoder.encode_image(preprocess(self.image_full.to(self.device)))
+                        self._clip_feature = clip_encoder.encode_image(preprocess(self.image_full.to('cuda' if torch.cuda.is_available() else 'cpu')))
                     torch.save(self._clip_feature, os.path.join(self.root_path, "clip_feature", "%04d.pt" % self.idx))
         return self._clip_feature
 

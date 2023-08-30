@@ -88,7 +88,7 @@ class CarlaDataset(Dataset):
                               for (data, label) in batch], dim=0)
         except Exception as e:
             for (data, label) in batch:
-                print("data_path: %s:%d" %(data.data_path,data.idx))
+                print("data_path: %s:%d" %(data.root_path,data.idx))
                 print('clip_feature:',data.clip_feature.shape)
                 print('vae_feature:',label.vae_feature.shape)
             raise e
