@@ -144,7 +144,7 @@ class DiffusionTrainer:
     def save_checkpoint(self,epoch:int,path:str):
         state = {
             "epoch":epoch,
-            "model_state_dict":self.model.state_dict(),
+            "model_state_dict":self.model.module.state_dict(),
             "optimizer_state_dict":self.optimizer.state_dict()
         }
         CheckPath(path)
