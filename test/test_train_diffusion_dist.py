@@ -52,11 +52,11 @@ if __name__ == "__main__":
     args = SetArgs()
     device = torch.device("cuda:%d" % int(os.environ["LOCAL_RANK"]))
     unet_model = UNet(with_lidar=args.lidar).to(device)
-    unet_optimizer = torch.optim.AdamW(unet_model.parameters(),lr=5e-5,
+    unet_optimizer = torch.optim.AdamW(unet_model.parameters(),lr=1e-5,
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
                               eps=1e-8)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=2,T_mult=2,eta_min=1e-6)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=30,T_mult=2,eta_min=1e-6)
     train_ds = CarlaDataset('/data/zjw/frank/dataset-remote/dataset-full',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10])
     # train_ds = CarlaDataset('/data/zjw/frank/dataset-remote/dataset-full',weathers=[4],towns=[1])
     val_ds = CarlaDataset('/data/zjw/frank/dataset-remote/dataset-val',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10])

@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 torchrun --nproc_per_node=6 test/test_train_diffusion_dist.py --resume --batch_size 4 --epoch 35 --autocast
+CUDA_VISIBLE_DEVICES=4,5,6,7 torchrun --nproc_per_node=4 test/test_train_diffusion_dist.py --resume --batch_size 4 --epoch 35 --autocast --lidar --accumulation 8
