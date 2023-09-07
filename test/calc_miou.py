@@ -35,9 +35,12 @@ seg_tag = {
 }
 
 drivable_area = [7,6,15,16]
+pedestrian = [4]
+car = [10]
+sidewalk = [8]
 intersection=Value('i',0)
 union=Value('i',0)
-RESULT_PATH = "..\\lidar_100"
+RESULT_PATH = "test/infer/lidar_100"
 gt_path = os.path.join(RESULT_PATH, "gt")
 result_path = os.path.join(RESULT_PATH, "result")
 def judge_type(rgb:np.ndarray):
@@ -45,28 +48,28 @@ def judge_type(rgb:np.ndarray):
     for i in seg_tag:
         if np.array_equal(rgb, np.array(seg_tag[i])):
             return i
-    if rgb == [26,26,26]:
+    if np.array_equal(rgb,np.array([26,26,26])):
         return 7
     raise ValueError("rgb is not in seg_tag")
 
 def calculate_single_iou(index,calc_area):
     gt = cv2.imread(os.path.join(gt_path, "%04d.png" % index))
-    result = cv2.imread(os.path.join(result_path, "%04d.png" % index))
+    results = cv2.imread(os.path.join(result_path, "%04d.png" % index))
     gt = cv2.cvtColor(gt, cv2.COLOR_BGR2RGB)
-    result = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
+    results = cv2.cvtColor(results, cv2.COLOR_BGR2RGB)
     gt = gt.reshape(-1, 3)
-    result = result.reshape(-1, 3)
+    results = results.reshape(-1, 3)
     gt = np.apply_along_axis(judge_type, 1, gt)
-    result = np.apply_along_axis(judge_type, 1, result)
+    results = np.apply_along_axis(judge_type, 1, results)
     global intersection
     global union
-    for index,result in enumerate(gt):
+    for index,result in enumerate(results):
         # calculate drivable iou
         cur_gt = gt[index]
-        if result in calc_area and cur_gt in calc_area:
+        if (result in calc_area) and (cur_gt in calc_area):
             intersection.value += 1
             union.value += 1
-        elif result in calc_area or cur_gt in calc_area:
+        elif (result in calc_area) or (cur_gt in calc_area):
             union.value += 1
         else:
             pass
@@ -75,7 +78,20 @@ logging.basicConfig(level=logging.ERROR)
 
 if __name__ == '__main__':
     num = len(os.listdir(gt_path))
-    process_map(calculate_single_iou,[i for i in range(num)],[drivable_area]*num,max_workers=16,chunksize=num//16)
-    print(intersection)
-    print(union)
-    # break
+    process_map(calculate_single_iou,[i for i in range(num)],[drivable_area]*num,max_workers=32,chunksize=64)
+    print("drivable_area: %.4f, %d/%d" % (intersection.value/union.value,intersection.value,union.value))
+    intersection.value = 0
+    union.value = 0
+    process_map(calculate_single_iou,[i for i in range(num)],[pedestrian]*num,max_workers=32,chunksize=64)
+    print("pedestrian: %.4f, %d/%d" % (intersection.value/union.value,intersection.value,union.value))
+    intersection.value = 0
+    union.value = 0
+    process_map(calculate_single_iou,[i for i in range(num)],[car]*num,max_workers=32,chunksize=64)
+    print("car: %.4f, %d/%d" % (intersection.value/union.value,intersection.value,union.value))
+    intersection.value = 0
+    union.value = 0
+    process_map(calculate_single_iou,[i for i in range(num)],[sidewalk]*num,max_workers=32,chunksize=64)
+    print("sidewalk: %.4f, %d/%d" % (intersection.value/union.value,intersection.value,union.value))
+    intersection.value = 0
+    union.value = 0
+    
