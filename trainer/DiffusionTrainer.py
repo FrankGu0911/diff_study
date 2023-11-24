@@ -22,7 +22,10 @@ class DiffusionTrainer:
                 writer:SummaryWriter=None,
                 model_save_path:str='pretrained/diffusion',
                 dist:bool=True):
-        self.gpu_id = int(os.environ["LOCAL_RANK"])
+        if dist:
+            self.gpu_id = int(os.environ["LOCAL_RANK"])
+        else:
+            self.gpu_id = 0
         self.model = unet_model.cuda(self.gpu_id)
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
@@ -30,6 +33,7 @@ class DiffusionTrainer:
         self.accumulation = accumulation
         self.train_loader = train_loader
         self.val_loader = val_loader
+        self.dist = dist
         if dist:
             self.model = DDP(self.model,device_ids=[self.gpu_id])
         self.autocast = autocast
@@ -142,11 +146,18 @@ class DiffusionTrainer:
             self.writer.add_scalar("val_loss",sum(val_loss)/len(val_loss),current_epoch)
 
     def save_checkpoint(self,epoch:int,path:str):
-        state = {
-            "epoch":epoch,
-            "model_state_dict":self.model.module.state_dict(),
-            "optimizer_state_dict":self.optimizer.state_dict()
-        }
+        if self.dist:
+            state = {
+                "epoch":epoch,
+                "model_state_dict":self.model.module.state_dict(),
+                "optimizer_state_dict":self.optimizer.state_dict()
+            }
+        else:
+            state = {
+                "epoch":epoch,
+                "model_state_dict":self.model.state_dict(),
+                "optimizer_state_dict":self.optimizer.state_dict()
+            }
         CheckPath(path)
         torch.save(state,os.path.join(path,f"diffusion_model_{epoch}.pth"))
 

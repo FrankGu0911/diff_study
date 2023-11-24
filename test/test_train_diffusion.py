@@ -43,13 +43,14 @@ if __name__ == "__main__":
     args = SetArgs()
     device = torch.device("cuda:0")
     unet_model = UNet(with_lidar=args.lidar).to(device)
-    unet_optimizer = torch.optim.AdamW(unet_model.parameters(),lr=5e-5,
+    unet_optimizer = torch.optim.AdamW(unet_model.parameters(),lr=1e-5,
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
                               eps=1e-8)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=2,T_mult=2,eta_min=1e-6)
-    train_ds = CarlaDataset('/media/frank/sn640-0/dataset/test-dataset/train',weathers=[0],towns=[1,2,3,4,5,6,7,10],topdown_base_weight=1,topdown_diff_weight=100)
-    val_ds = CarlaDataset('/media/frank/sn640-0/dataset/test-dataset/val',weathers=[0],towns=[1,2,3,4,5,6,7,10],topdown_base_weight=1,topdown_diff_weight=100)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=30,T_mult=2,eta_min=1e-6)
+    train_ds = CarlaDataset('/media/frank/sn640-0/dataset/dataset-full',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10])
+    # train_ds = CarlaDataset('/data/zjw/frank/dataset-remote/dataset-full',weathers=[4],towns=[1])
+    val_ds = CarlaDataset('/media/frank/sn640-0/dataset/dataset-val',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10])
     if args.lidar:
         train_loader = DataLoader(train_ds,
                                 batch_size=args.batch_size,
@@ -91,16 +92,13 @@ if __name__ == "__main__":
         torch.cuda.empty_cache()
     else:
         current_epoch = 0
-    if os.environ["LOCAL_RANK"] == "0":
-        logging.info(f"Start at epoch{current_epoch}")
-        if args.lidar:
-            log_path = os.path.join("log",'diffusion_lidar')
-        else:
-            log_path = os.path.join("log",'diffusion')
-        CheckPath(log_path)
-        writer = SummaryWriter(log_dir=log_path)
+    logging.info(f"Start at epoch{current_epoch}")
+    if args.lidar:
+        log_path = os.path.join("log",'diffusion_lidar')
     else:
-        writer = None
+        log_path = os.path.join("log",'diffusion')
+    CheckPath(log_path)
+    writer = SummaryWriter(log_dir=log_path)
     trainer = DiffusionTrainer(unet_model=unet_model,
                                 train_loader=train_loader,
                                 val_loader=val_loader,
