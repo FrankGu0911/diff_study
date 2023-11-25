@@ -199,7 +199,7 @@ class CrossAttention(torch.nn.Module):
         #[8, 4096, 40] * [8, 40, 77] -> [8, 4096, 77]
         #atten = q.bmm(k.transpose(1, 2)) * (self.dim_q // 8)**-0.5
         atten = torch.baddbmm(
-            torch.empty(q.shape[0], q.shape[1], k.shape[1], device=q.device),
+            torch.empty(q.shape[0], q.shape[1], k.shape[1], device=q.device).to(q.dtype),
             q,
             k.transpose(1, 2),
             beta=0,
@@ -356,9 +356,10 @@ class UpBlock(torch.nn.Module):
     
 class UNet(torch.nn.Module):
 
-    def __init__(self,with_lidar=False):
+    def __init__(self,with_lidar=False,half=False):
         super().__init__()
         self.with_lidar = with_lidar
+        self.half = half
         #lidar
         if self.with_lidar:
             self.lidar_in_net = torch.nn.Sequential(
@@ -458,6 +459,8 @@ class UNet(torch.nn.Module):
             torch.nn.SiLU(),
             torch.nn.Conv2d(320, 4, kernel_size=3, padding=1),
         )
+        if self.half:
+            self.to(torch.bfloat16)
 
     def forward(self, out_vae, out_encoder, time,lidar=None):
         if self.with_lidar:
@@ -491,6 +494,8 @@ class UNet(torch.nn.Module):
 
         #[1] -> [1, 320]
         time = get_time_embed(time)
+        if out_vae.dtype == torch.bfloat16:
+            time = time.to(torch.bfloat16)
         #[1, 320] -> [1, 1280]
         time = self.in_time(time)
         #----down----
@@ -558,6 +563,8 @@ class UNet(torch.nn.Module):
                                time)
 
         #[1, 1280, 8, 8] -> [1, 1280, 16, 16]
+        # if self.half:
+        #     out_vae = out_vae.to(torch.float32)
         out_vae = self.up_in(out_vae)
 
         #[1, 1280, 16, 16],[1, 77, 768],[1, 1280] -> [1, 1280, 32, 32]
@@ -586,7 +593,12 @@ class UNet(torch.nn.Module):
         return out_vae
     
 if __name__ == '__main__':
-    net = UNet(with_lidar=True)
-    y = net(torch.rand(4,4,32,32),torch.randn(4, 4, 768),torch.LongTensor([0,1,2,3]),lidar=torch.randn(4,3,256,256))
+    net = UNet(with_lidar=False).to(torch.bfloat16).cuda()
+    vae = torch.randn(4,4,32,32).to(torch.bfloat16).cuda()
+    encoder = torch.randn(4,4,768).to(torch.bfloat16).cuda()
+    time = torch.LongTensor([0,1,2,3]).cuda()
+    y = net(vae,encoder,time)
+
+    # y = net(torch.rand(4,4,32,32),torch.randn(4, 4, 768),torch.LongTensor([0,1,2,3]),lidar=torch.randn(4,3,256,256))
     # y = net.lidar_in_net(torch.randn(4,3,256,256))
-    print(y.shape)
+    print(y.dtype)
