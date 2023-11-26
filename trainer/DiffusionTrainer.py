@@ -21,12 +21,22 @@ class DiffusionTrainer:
                 accumulation:int=1,
                 writer:SummaryWriter=None,
                 model_save_path:str='pretrained/diffusion',
-                dist:bool=True):
+                dist:bool=True,
+                half:bool=False):
         if dist:
             self.gpu_id = int(os.environ["LOCAL_RANK"])
         else:
             self.gpu_id = 0
-        self.model = unet_model.cuda(self.gpu_id)
+        self.autocast = autocast
+        self.half = half
+        if self.half and self.autocast:
+            logging.warning("Half precision is enabled, autocast will be disabled.")
+            self.autocast = False
+        if self.half:
+            self.model = unet_model.to(torch.bfloat16)
+        else:
+            self.model = unet_model
+        self.model = self.model.cuda(self.gpu_id)
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
         self.with_lidar = with_lidar
@@ -73,32 +83,63 @@ class DiffusionTrainer:
             # data[1] -> (batch_size, 3, 256, 256)
             # label -> (batch_size, 4, 32, 32)
             if self.with_lidar:
-                data, lidar = data[0].cuda(self.gpu_id),data[1].cuda(self.gpu_id)
+                data, lidar = data[0],data[1]
+            else:
+                data = data
+            if self.half:
+                data = data.to(torch.bfloat16).cuda(self.gpu_id)
+                if self.with_lidar:
+                    lidar = lidar.to(torch.bfloat16).cuda(self.gpu_id)
+                label = label.to(torch.bfloat16).cuda(self.gpu_id)
             else:
                 data = data.cuda(self.gpu_id)
-            label = label.cuda(self.gpu_id)
+                if self.with_lidar:
+                    lidar = lidar.cuda(self.gpu_id)
+                label = label.cuda(self.gpu_id)
             # self.optimizer.zero_grad()
             noise = torch.randn_like(label)
             noise_step = torch.randint(0, 1000, (data.shape[0], )).long().cuda(self.gpu_id)
             z_noise = self.scheduler.add_noise(label, noise, noise_step)
             if (current_epoch * len(self.train_loader) + i + 1) % self.accumulation != 0:
-                with autocast(enabled=self.autocast) and self.model.no_sync():
-                    if self.with_lidar:
-                        pred = self.model(z_noise,data,noise_step,lidar)
-                    else:
-                        pred = self.model(z_noise,data,noise_step)
-                    loss = self.criterion(pred,noise) 
-                    scaler.scale(loss/self.accumulation).backward()
+                if self.autocast:
+                    with autocast(enabled=self.autocast) and self.model.no_sync():
+                        if self.with_lidar:
+                            pred = self.model(z_noise,data,noise_step,lidar)
+                        else:
+                            pred = self.model(z_noise,data,noise_step)
+                        loss = self.criterion(pred,noise) 
+                        scaler.scale(loss/self.accumulation).backward()
+                else:
+                    with self.model.no_sync():
+                        if self.with_lidar:
+                            pred = self.model(z_noise,data,noise_step,lidar)
+                        else:
+                            pred = self.model(z_noise,data,noise_step)
+                        loss = self.criterion(pred,noise) 
+                        (loss/self.accumulation).backward()
             else:
-                with autocast(enabled=self.autocast):
+                if self.autocast:
+                    with autocast(enabled=self.autocast):
+                        if self.with_lidar:
+                            pred = self.model(z_noise,data,noise_step,lidar)
+                        else:
+                            pred = self.model(z_noise,data,noise_step)
+                        loss = self.criterion(pred,noise)
+                        scaler.scale(loss/self.accumulation).backward()
+                        scaler.step(self.optimizer)
+                        scaler.update()
+                else:
                     if self.with_lidar:
                         pred = self.model(z_noise,data,noise_step,lidar)
                     else:
                         pred = self.model(z_noise,data,noise_step)
                     loss = self.criterion(pred,noise)
-                    scaler.scale(loss/self.accumulation).backward()
-                    scaler.step(self.optimizer)
-                    scaler.update()
+                    (loss/self.accumulation).backward()
+                    self.optimizer.step()
+
+                    # scaler.scale(loss/self.accumulation).backward()
+                    # scaler.step(self.optimizer)
+                    # scaler.update()
                 self.optimizer.zero_grad()
             if torch.isnan(loss):
                 tqdm.write("Loss is NaN!")
@@ -121,10 +162,14 @@ class DiffusionTrainer:
         val_loss = []
         for (data,label) in val_loop:
             if self.with_lidar:
-                data, lidar = data[0].cuda(self.gpu_id),data[1].cuda(self.gpu_id)
+                data, lidar = data[0].cuda(self.gpu_id),data[1]
             else:
-                data = data.cuda(self.gpu_id)
-            label = label.cuda(self.gpu_id)
+                data = data
+            if self.half:
+                data = data.to(torch.bfloat16).cuda(self.gpu_id)
+                if self.with_lidar:
+                    lidar = lidar.to(torch.bfloat16).cuda(self.gpu_id)
+                label = label.to(torch.bfloat16).cuda(self.gpu_id)
             noise = torch.randn_like(label)
             noise_step = torch.randint(0, 1000, (data.shape[0], )).long().cuda(self.gpu_id)
             z_noise = self.scheduler.add_noise(label, noise, noise_step)
