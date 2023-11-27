@@ -99,17 +99,19 @@ if __name__ == '__main__':
     # logging.basicConfig(level=logging.DEBUG)
     # dataset = CarlaDataset("E:\\dataset")
     # print(len(dataset))
-    val_ds = CarlaDataset('E:/dataset',weathers=[0],towns=[10],topdown_base_weight=1,topdown_diff_weight=100)
-    val_loader = DataLoader(val_ds,
-                            batch_size=4,
-                            shuffle=True,
-                            collate_fn=CarlaDataset.clip_lidar_feature2vae_feature_collate_fn,
-                            )
-    for (data,label) in val_loader:
-        print(data[0].shape)
-        print(data[1].shape)
-        print(label.shape)
-    # dataset = CarlaDataset("test/data",weathers=[0],vae_model_path='pretrained/vae_one_hot/vae_model_54.pth')
+    # val_ds = CarlaDataset('E:/dataset',weathers=[0],towns=[10],topdown_base_weight=1,topdown_diff_weight=100)
+    # val_loader = DataLoader(val_ds,
+    #                         batch_size=4,
+    #                         shuffle=True,
+    #                         collate_fn=CarlaDataset.clip_lidar_feature2vae_feature_collate_fn,
+    #                         )
+    # for (data,label) in val_loader:
+    #     print(data[0].shape)
+    #     print(data[1].shape)
+    #     print(label.shape)
+    dataset = CarlaDataset("test/data")
+    for data,label in dataset:
+        print(data.lidar_2d.shape,data.lidar_2d.dtype)
     # dataloader = DataLoader(dataset, batch_size=8,shuffle=True, collate_fn=CarlaDataset.image2topdown_collate_fn)
     # for (data, label) in dataloader:
     #     print(data.shape)

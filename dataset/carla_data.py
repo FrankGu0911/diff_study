@@ -207,12 +207,36 @@ class CarlaData():
         # features = np.transpose(features, (2, 0, 1)).astype(np.float32)
         return features
 
+    def lidar_2d_feature(self, lidar:np.ndarray):
+        point = lidar[:,:3]
+        point = point[(point[:,2] > -2.0)] # above road
+        point = point[(point[:,0] > -22.5)]
+        point = point[(point[:,0] < 22.5)]
+        point = point[(point[:,1] < 45)]
+        point = point[(point[:,1] > 0)]
+        histogram = np.zeros((256,256))
+        for p in point:
+            histogram[int((45-p[1])/45*256),int((p[0]+22.5)/45*256)] = 255
+        return histogram
+
+
     @property
-    def lidar_2d_feature(self):
-        #TODO: lidar_to_histogram_features
+    def lidar_2d(self):
         if self._lidar_2d is None:
-            self._lidar_2d = self.lidar_to_histogram_features(self.lidar)
-        return ToTensor()(self._lidar_2d)
+            try:
+                self._lidar_2d = self._LoadImage("lidar_2d", self.idx, "png")
+            except FileNotFoundError:
+                if self._lidar is None:
+                    self._lidar = self._LoadNpy("lidar", self.idx)
+                histogram = self.lidar_2d_feature(self._lidar)
+                self._lidar_2d = Image.fromarray(histogram).convert('L')
+                if not os.path.exists(os.path.join(self.root_path, "lidar_2d")):
+                    os.makedirs(os.path.join(self.root_path, "lidar_2d"))
+                self._lidar_2d.save(os.path.join(self.root_path, "lidar_2d", "%04d.png" % self.idx))
+        ret = ToTensor()(self._lidar_2d)
+        if ret.shape[0] == 1:
+            ret = torch.cat((ret, ret, ret))
+        return ret
 
     @property
     def clip_feature(self):
