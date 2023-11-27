@@ -356,10 +356,9 @@ class UpBlock(torch.nn.Module):
     
 class UNet(torch.nn.Module):
 
-    def __init__(self,with_lidar=False,half=False):
+    def __init__(self,with_lidar=False):
         super().__init__()
         self.with_lidar = with_lidar
-        self.half = half
         #lidar
         if self.with_lidar:
             self.lidar_in_net = torch.nn.Sequential(
@@ -459,10 +458,8 @@ class UNet(torch.nn.Module):
             torch.nn.SiLU(),
             torch.nn.Conv2d(320, 4, kernel_size=3, padding=1),
         )
-        if self.half:
-            self.to(torch.bfloat16)
 
-    def forward(self, out_vae, out_encoder, time,lidar=None):
+    def forward(self, out_vae, out_encoder, time,lidar=None,down_block_additional_residuals=None,mid_block_additional_residual=None):
         if self.with_lidar:
             if lidar is None:
                 raise Exception("lidar is None")
@@ -499,46 +496,42 @@ class UNet(torch.nn.Module):
         #[1, 320] -> [1, 1280]
         time = self.in_time(time)
         #----down----
-        #[1, 320, 64, 64]
-        #[1, 320, 64, 64]
-        #[1, 320, 64, 64]
-        #[1, 320, 32, 32]
-        #[1, 640, 32, 32]
-        #[1, 640, 32, 32]
-        #[1, 640, 16, 16]
-        #[1, 1280, 16, 16]
-        #[1, 1280, 16, 16]
-        #[1, 1280, 8, 8]
-        #[1, 1280, 8, 8]
-        #[1, 1280, 8, 8]
-        out_down = [out_vae]
-
-        #[1, 320, 64, 64],[1, 77, 768],[1, 1280] -> [1, 320, 32, 32]
-        #out -> [1, 320, 64, 64],[1, 320, 64, 64][1, 320, 32, 32]
+        is_controlnet = mid_block_additional_residual is not None and down_block_additional_residuals is not None
+        out_down = [out_vae] # [1, 320, 32, 32]
+        #[1, 320, 32, 32],[1, 77, 768],[1, 1280] -> [1, 320, 32, 32]
+        #out_vae -> [1, 320, 16, 16]
+        #out -> [1, 320, 32, 32],[1, 320, 32, 32][1, 320, 16, 16]
         out_vae, out = self.down_block0(out_vae=out_vae,
                                         out_encoder=out_encoder,
                                         time=time)
         out_down.extend(out)
         #[1, 320, 32, 32],[1, 77, 768],[1, 1280] -> [1, 640, 16, 16]
-        #out -> [1, 640, 32, 32],[1, 640, 32, 32],[1, 640, 16, 16]
+        #out_vae -> [1, 640, 8, 8]
+        #out -> [1, 640, 16, 16],[1, 640, 16, 16],[1, 640, 8, 8]
         out_vae, out = self.down_block1(out_vae=out_vae,
                                         out_encoder=out_encoder,
                                         time=time)
         out_down.extend(out)
         #[1, 640, 16, 16],[1, 77, 768],[1, 1280] -> [1, 1280, 8, 8]
-        #out -> [1, 1280, 16, 16],[1, 1280, 16, 16],[1, 1280, 8, 8]
+        #out_vae -> [1, 1280, 4, 4]
+        #out -> [1, 1280, 8, 8],[1, 1280, 8, 8],[1, 1280, 4, 4]
         out_vae, out = self.down_block2(out_vae=out_vae,
                                         out_encoder=out_encoder,
                                         time=time)
         out_down.extend(out)
-        #[1, 1280, 8, 8],[1, 1280] -> [1, 1280, 8, 8]
+        #[1, 1280, 8, 8],[1, 1280] -> [1, 1280, 4, 4]
         out_vae = self.down_res0(out_vae, time)
         out_down.append(out_vae)
-
-        #[1, 1280, 8, 8],[1, 1280] -> [1, 1280, 8, 8]
+        #[1, 1280, 4, 4],[1, 1280] -> [1, 1280, 4, 4]
         out_vae = self.down_res1(out_vae, time)
         out_down.append(out_vae)
-
+        # controlnet
+        if is_controlnet:
+            new_out_down = []
+            for down_block_res_sample, down_block_additional_residual in zip(out_down,down_block_additional_residuals):
+                new_out_down.append(down_block_res_sample + down_block_additional_residual)
+            out_down = new_out_down
+        
         #----mid----
         #[1, 1280, 8, 8],[1, 1280] -> [1, 1280, 8, 8]
         out_vae = self.mid_res0(out_vae, time)
@@ -548,6 +541,9 @@ class UNet(torch.nn.Module):
 
         #[1, 1280, 8, 8],[1, 1280] -> [1, 1280, 8, 8]
         out_vae = self.mid_res1(out_vae, time)
+        
+        if is_controlnet:
+            out_vae = out_vae + mid_block_additional_residual
 
         #----up----
         #[1, 1280+1280, 8, 8],[1, 1280] -> [1, 1280, 8, 8]
@@ -563,8 +559,6 @@ class UNet(torch.nn.Module):
                                time)
 
         #[1, 1280, 8, 8] -> [1, 1280, 16, 16]
-        # if self.half:
-        #     out_vae = out_vae.to(torch.float32)
         out_vae = self.up_in(out_vae)
 
         #[1, 1280, 16, 16],[1, 77, 768],[1, 1280] -> [1, 1280, 32, 32]

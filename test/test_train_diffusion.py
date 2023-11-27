@@ -43,12 +43,15 @@ def latest_model_path(path):
 if __name__ == "__main__":
     args = SetArgs()
     device = torch.device("cuda:0")
-    unet_model = UNet(with_lidar=args.lidar,half=args.half).to(device)
-    unet_optimizer = torch.optim.AdamW(unet_model.parameters(),lr=1e-5,
+    unet_model = UNet(with_lidar=args.lidar)
+    if args.half:
+        unet_model = unet_model.to(torch.bfloat16)
+    unet_model = unet_model.to(device)
+    unet_optimizer = torch.optim.AdamW(unet_model.parameters(),lr=1e-4,
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
                               eps=1e-8)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=30,T_mult=2,eta_min=1e-6)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=30,T_mult=2,eta_min=1e-5)
     train_ds = CarlaDataset('test/data',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10])
     # train_ds = CarlaDataset('/data/zjw/frank/dataset-remote/dataset-full',weathers=[4],towns=[1])
     val_ds = CarlaDataset('test/data',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10])
@@ -58,14 +61,14 @@ if __name__ == "__main__":
                                 shuffle=True,
                                 collate_fn=CarlaDataset.clip_lidar_feature2vae_feature_collate_fn,
                                 pin_memory=True,
-                                num_workers=8,
+                                num_workers=16,
                                 )
         val_loader = DataLoader(val_ds,
                                 batch_size=args.batch_size,
                                 shuffle=True,
                                 collate_fn=CarlaDataset.clip_lidar_feature2vae_feature_collate_fn,
                                 pin_memory=True,
-                                num_workers=8,
+                                num_workers=16,
                                 )
     else:
         train_loader = DataLoader(train_ds,
@@ -73,14 +76,14 @@ if __name__ == "__main__":
                                 shuffle=True,
                                 collate_fn=CarlaDataset.clip_feature2vae_feature_collate_fn,
                                 pin_memory=True,
-                                num_workers=8,
+                                num_workers=16,
                                 )
         val_loader = DataLoader(val_ds,
                                 batch_size=args.batch_size,
                                 shuffle=True,
                                 collate_fn=CarlaDataset.clip_feature2vae_feature_collate_fn,
                                 pin_memory=True,
-                                num_workers=8,
+                                num_workers=16,
                                 )
     if args.lidar:
         model_path = os.path.join("pretrained",'diffusion_lidar')
