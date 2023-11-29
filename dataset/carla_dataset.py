@@ -15,6 +15,8 @@ class CarlaDataset(Dataset):
             topdown_diff_weight=100,
             gen_feature=False,
             vae_model_path=None,
+            pred_len=0,
+            seq_len=1,
     ):
         super().__init__()
         self.root = root
@@ -26,6 +28,8 @@ class CarlaDataset(Dataset):
         self.topdown_diff_weight = topdown_diff_weight
         self.gen_feature = gen_feature
         self.vae_model_path = vae_model_path
+        self.pred_len = pred_len
+        self.seq_len = seq_len
         for line in dataset_indexs:
             if len(line.split()) != 2:
                 continue
@@ -38,7 +42,8 @@ class CarlaDataset(Dataset):
             town = int(res[0][1])
             if weather not in weathers or town not in towns:
                 continue
-            for i in range(frames):
+            # remove the first frame and the last two frame
+            for i in range(self.seq_len + 1, frames - self.pred_len - 1):
                 self.route_frames.append((os.path.join(root, path), i))
         _logger.info("Sub route dir nums: %d" % len(self.route_frames))
 
@@ -47,12 +52,13 @@ class CarlaDataset(Dataset):
     
     def __getitem__(self, idx):
         route_dir, frame_id = self.route_frames[idx]
-        data = CarlaData(route_dir, frame_id, gen_feature=self.gen_feature)
+        data = CarlaData(route_dir, frame_id, gen_feature=self.gen_feature,seq_len=self.seq_len)
         label = CarlaLabel(route_dir, frame_id,
                            base_weight=self.topdown_base_weight,
                            diff_weight=self.topdown_diff_weight, 
                            gen_feature=self.gen_feature, 
-                           vae_model_path=self.vae_model_path)
+                           vae_model_path=self.vae_model_path,
+                           pred_len=self.pred_len)
         return (data, label)
 
     @staticmethod
@@ -126,11 +132,14 @@ if __name__ == '__main__':
     #     print(data[0].shape)
     #     print(data[1].shape)
     #     print(label.shape)
-    dataset = CarlaDataset("test/data")
+    dataset = CarlaDataset("E:\\remote\\dataset-full")
     for data,label in dataset:
-        print(data.lidar_2d.shape,data.lidar_2d.dtype)
-        print(data.clip_feature.shape,data.clip_feature.dtype)
-        break
+        # if data.gt_command != data.command:
+        #     print(data.root_path,data.idx)
+        if data.command < 1 or data.command > 6:
+            print(data.root_path,data.idx)
+        if data.gt_command < 1 or data.gt_command > 6:
+            print(data.root_path,data.idx)
     # dataloader = DataLoader(dataset, batch_size=8,shuffle=True, collate_fn=CarlaDataset.image2topdown_collate_fn)
     # for (data, label) in dataloader:
     #     print(data.shape)

@@ -1,4 +1,5 @@
-import os,re,logging,torch
+import os,re,logging,torch,json
+import numpy as np
 from PIL import Image
 from torchvision import transforms
 _logger = logging.getLogger(__name__)
@@ -11,14 +12,17 @@ class CarlaLabel():
         important_seg: list = [4,19,23],
         base_weight: int = 1,
         diff_weight: int = 100,
+        pred_len: int = 0,
         gen_feature: bool = True,
         vae_model_path: str = None,
         ):
         self.root_path = path
         self.index = index
+        self.pred_len = pred_len
         self._topdown = None
         self._topdown_onehot = None
         self._vae_feature = None
+        self._measurements = None
         self.important_seg = important_seg
         self.base_weight = base_weight
         self.diff_weight = diff_weight
@@ -52,6 +56,14 @@ class CarlaLabel():
             raise FileNotFoundError(f"File {path} does not exist")
         logging.debug(f"Load image from {path}")
         return Image.open(path)
+    
+    def _LoadJson(self, name: str, idx: int):
+        path = os.path.join(self.root_path, name, "%04d.json" % idx)
+        if not os.path.exists(path):
+            logging.error(f"File {path} does not exist")
+            raise FileNotFoundError(f"File {path} does not exist")
+        logging.debug(f"Load json from {path}")
+        return json.load(open(path, "r"))
 
     def get_one_hot(self,label, N):
         dtype = label.dtype
@@ -111,9 +123,130 @@ class CarlaLabel():
                     raise FileNotFoundError("Vae Feature %s does not exist" % os.path.join(self.root_path, "vae_feature", "%04d.pt" % self.index))
         return self._vae_feature
     
+    def transform_waypoints(self,x,y,x_command,y_command,theta):
+        x_relative = x_command - x
+        y_relative = y_command - y
+        x = x_relative * np.cos(theta) + y_relative * np.sin(theta)
+        y = -x_relative * np.sin(theta) + y_relative * np.cos(theta)
+        return (x,y)       
+
+    @property
+    def command_waypoints(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.index)
+        x = self._measurements["gps_x"]
+        y = self._measurements["gps_y"]
+        theta = self._measurements["theta"]
+        waypoints = []
+        for i in self._measurements["future_waypoints"][0:self.pred_len]:
+            way_x,way_y = self.transform_waypoints(x,y,i[0],i[1],theta)
+            waypoints.append((way_x,way_y))
+        return waypoints
+    
+    @property
+    def future_waypoints(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.index)
+        x = self._measurements["gps_x"]
+        y = self._measurements["gps_y"]
+        theta = self._measurements["theta"]
+        waypoints = []
+        for i in range(self.pred_len):
+            measurements = self._LoadJson("measurements_full", self.index+i+1)
+            future_x,future_y = measurements["gps_x"],measurements["gps_y"]
+            way_x,way_y = self.transform_waypoints(x,y,future_x,future_y,theta)
+            waypoints.append((way_x,way_y))
+        return waypoints
+
+    @property
+    def should_break(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.index)
+        if self._measurements["should_brake"] == 1:
+            return torch.Tensor([1,0])
+        else:
+            return torch.Tensor([0,1])
+    
+    @property
+    def should_slow(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.index)
+        if self._measurements["should_slow"] == 1:
+            return torch.Tensor([1,0])
+        else:
+            return torch.Tensor([0,1])
+    
+    @property
+    def is_junction(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.index)
+        if self._measurements["is_junction"] == True:
+            return torch.Tensor([1,0])
+        else:
+            return torch.Tensor([0,1])
+        
+    @property
+    def is_vehicle_present(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.index)
+        if self._measurements["is_vehicle_present"] != []:
+            return torch.Tensor([1,0])
+        else:
+            return torch.Tensor([0,1])
+    
+    @property
+    def is_bike_present(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.index)
+        if self._measurements["is_bike_present"] != []:
+            return torch.Tensor([1,0])
+        else:
+            return torch.Tensor([0,1])
+    
+    @property
+    def is_lane_vehicle_present(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.index)
+        if self._measurements["is_lane_vehicle_present"] != []:
+            return torch.Tensor([1,0])
+        else:
+            return torch.Tensor([0,1])
+        
+    @property
+    def is_junction_vehicle_present(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.index)
+        if self._measurements["is_junction_vehicle_present"] != []:
+            return torch.Tensor([1,0])
+        else:
+            return torch.Tensor([0,1])
+        
+    @property
+    def is_pedestrian_present(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.index)
+        if self._measurements["is_pedestrian_present"] != []:
+            return torch.Tensor([1,0])
+        else:
+            return torch.Tensor([0,1])
+    
+    @property
+    def is_red_light_present(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.index)
+        if self._measurements["is_red_light_present"] != []:
+            return torch.Tensor([1,0])
+        else:
+            return torch.Tensor([0,1])
+    
+    @property
+    def measurements_onehot(self):
+        return torch.cat([self.should_break,self.should_slow,self.is_junction,self.is_vehicle_present,self.is_bike_present,self.is_lane_vehicle_present,self.is_junction_vehicle_present,self.is_pedestrian_present,self.is_red_light_present],dim=0).to(torch.float32)
+    
 if __name__ == "__main__":
     # a = CarlaLabel("test/data/weather-0/data/routes_town01_long_w0_06_23_01_05_07", 0,vae_model_path='pretrained/vae_one_hot/vae_model_54.pth')
-    a = CarlaLabel("E:\\dataset\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 45)
-    print(a.topdown_onehot.shape)
-    print(a.topdown.shape)
-    print(a.vae_feature.shape)
+    a = CarlaLabel("E:\\remote\\dataset-full\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 15,pred_len=4)
+    # print(a.future_waypoints)
+    # print(a.command_waypoints)
+    print(a.measurements_onehot)
+    print(a.measurements_onehot.shape)

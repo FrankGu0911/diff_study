@@ -24,10 +24,12 @@ class CarlaData():
         idx: int, 
         is_rgb_merged: bool = True,
         gen_feature: bool = False,
+        seq_len: int = 1,
         ):
         self.root_path = path
         self.idx = idx
         self.gen_feature = gen_feature
+        self.seq_len = seq_len
         self._image_front = None
         self._image_left = None
         self._image_right = None
@@ -219,7 +221,6 @@ class CarlaData():
             histogram[int((45-p[1])/45*256),int((p[0]+22.5)/45*256)] = 255
         return histogram
 
-
     @property
     def lidar_2d(self):
         if self._lidar_2d is None:
@@ -261,7 +262,85 @@ class CarlaData():
                     torch.save(self._clip_feature, os.path.join(self.root_path, "clip_feature", "%04d.pt" % self.idx))
         return self._clip_feature
 
+    @property
+    def ego_position(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.idx)
+        (x,y,theta) = self._measurements["gps_x"],self._measurements["gps_y"],self._measurements["theta"]
+        return (x,y,theta)
+    
+    @property
+    def ego_x(self):
+        return self.ego_position[0]
+
+    @property
+    def ego_y(self):
+        return self.ego_position[1]
+    
+    @property
+    def ego_theta(self):
+        return self.ego_position[2]
+
+    @property
+    def raw_point_command(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.idx)
+        return (self._measurements["x_command"],self._measurements["y_command"])
+    
+    @property
+    def raw_x_command(self):
+        return self.raw_point_command[0]
+    
+    @property
+    def raw_y_command(self):
+        return self.raw_point_command[1]
+    
+    @property
+    def point_command(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.idx)
+        x_relative = self.raw_x_command - self.ego_x
+        y_relative = self.raw_y_command - self.ego_y
+        x = x_relative * np.cos(self.ego_theta) + y_relative * np.sin(self.ego_theta)
+        y = -x_relative * np.sin(self.ego_theta) + y_relative * np.cos(self.ego_theta)
+        return (x,y)
+    
+    @property
+    def x_command(self):
+        return self.point_command[0]
+    
+    @property
+    def y_command(self):
+        return self.point_command[1]
+
+    @property
+    def speed(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.idx)
+        return self._measurements["speed"]
+    
+    @property
+    def command(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.idx)
+        return self._measurements["command"]
+
+    @property
+    def gt_command(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.idx)
+        return self._measurements["gt_command"]
+    
+    @property
+    def gt_command_onehot(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.idx)
+        # 1 - 6
+        ret = torch.zeros(6,dtype=torch.float32)
+        ret[self._measurements["gt_command"] - 1] = 1
+        return ret
+    
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    data = CarlaData("E:\\dataset\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 56)
-    print(data.lidar_2d_feature.shape)
+    data = CarlaData("E:\\remote\\dataset-full\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 0)
+    print(data.gt_command_onehot)
