@@ -25,11 +25,14 @@ class CarlaData():
         is_rgb_merged: bool = True,
         gen_feature: bool = False,
         seq_len: int = 1,
+        cache = None
         ):
         self.root_path = path
+        self.relative_path = "/".join(self.root_path.replace("\\","/").split("/")[-3:])
         self.idx = idx
         self.gen_feature = gen_feature
         self.seq_len = seq_len
+        self.cache = cache
         self._image_front = None
         self._image_left = None
         self._image_right = None
@@ -267,6 +270,33 @@ class CarlaData():
         if self._measurements is None:
             self._measurements = self._LoadJson("measurements_full", self.idx)
         (x,y,theta) = self._measurements["gps_x"],self._measurements["gps_y"],self._measurements["theta"]
+        if np.isnan(theta):
+            print(self.root_path,self.idx)
+            with open("log/data.log","a") as f:
+                f.write("%s %d\n" % (self.root_path,self.idx))
+            # raise ValueError("theta is nan")
+            if self.idx != 0:
+                me = self._LoadJson("measurements_full", self.idx-1)
+                theta1 = me["theta"]
+            if self.idx != len(os.listdir(os.path.join(self.root_path, "measurements_full"))) - 1:
+                me = self._LoadJson("measurements_full", self.idx + 1)
+                theta2 = me["theta"]
+            if self.idx == 0:
+                raise ValueError("theta is nan")
+            elif self.idx == len(os.listdir(os.path.join(self.root_path, "measurements_full"))) - 1:
+                theta = theta1
+            elif np.isnan(theta2):
+                theta = theta1
+            else:
+                # calucate the acute angle between theta1 and theta2
+                import math
+                if math.fabs(theta1-theta2) > math.pi:
+                    theta = (theta1 + theta2) / 2 + math.pi
+                else:
+                    theta = (theta1 + theta2) / 2
+            self._measurements["theta"] = theta
+            json.dump(self._measurements,open(os.path.join(self.root_path, "measurements_full", "%04d.json" % self.idx),'w'))
+    
         return (x,y,theta)
     
     @property
@@ -303,7 +333,13 @@ class CarlaData():
         y_relative = self.raw_y_command - self.ego_y
         x = x_relative * np.cos(self.ego_theta) + y_relative * np.sin(self.ego_theta)
         y = -x_relative * np.sin(self.ego_theta) + y_relative * np.cos(self.ego_theta)
-        return (x,y)
+        ret = torch.tensor((x,y))
+        if torch.isnan(ret).any():
+            print(self.root_path,self.idx)
+            print(self.ego_position)
+            print(self.raw_point_command)
+            raise ValueError("point_command is nan")
+        return ret
     
     @property
     def x_command(self):
@@ -338,6 +374,8 @@ class CarlaData():
         # 1 - 6
         ret = torch.zeros(6,dtype=torch.float32)
         ret[self._measurements["gt_command"] - 1] = 1
+        if torch.isnan(ret).any():
+            raise ValueError("gt_command_onehot is nan")
         return ret
     
 if __name__ == "__main__":

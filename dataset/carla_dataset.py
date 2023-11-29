@@ -1,4 +1,4 @@
-import os,re,logging,torch
+import os,re,logging,torch,json
 from torch.utils.data import Dataset,DataLoader
 from carla_data import CarlaData
 from carla_label import CarlaLabel
@@ -17,10 +17,11 @@ class CarlaDataset(Dataset):
             vae_model_path=None,
             pred_len=0,
             seq_len=1,
+            use_cache=True,
     ):
         super().__init__()
         self.root = root
-        dataset_indexs = open(os.path.join(root, 'dataset_index.txt'), 'r').read().split('\n')
+        self.dataset_indexs = open(os.path.join(root, 'dataset_index.txt'), 'r').read().split('\n')
         pattern = re.compile('weather-(\d+).*town(\d\d)')
         self.route_frames = []
         self.topdown_onehot = topdown_onehot
@@ -30,7 +31,13 @@ class CarlaDataset(Dataset):
         self.vae_model_path = vae_model_path
         self.pred_len = pred_len
         self.seq_len = seq_len
-        for line in dataset_indexs:
+        if use_cache:
+            if not os.path.exists(os.path.join(root,'cache.json')):\
+                self.gen_cache()
+            self.cache = json.load(open(os.path.join(root,'cache.json'),'r'))
+        else:
+            self.cache = None
+        for line in self.dataset_indexs:
             if len(line.split()) != 2:
                 continue
             path, frames = line.split()
@@ -52,14 +59,40 @@ class CarlaDataset(Dataset):
     
     def __getitem__(self, idx):
         route_dir, frame_id = self.route_frames[idx]
-        data = CarlaData(route_dir, frame_id, gen_feature=self.gen_feature,seq_len=self.seq_len)
+        data = CarlaData(route_dir, frame_id, 
+                         gen_feature=self.gen_feature,
+                         seq_len=self.seq_len,
+                         cache = self.cache)
         label = CarlaLabel(route_dir, frame_id,
                            base_weight=self.topdown_base_weight,
                            diff_weight=self.topdown_diff_weight, 
                            gen_feature=self.gen_feature, 
                            vae_model_path=self.vae_model_path,
-                           pred_len=self.pred_len)
+                           pred_len=self.pred_len,
+                           cache=self.cache)
         return (data, label)
+
+    def gen_cache(self):
+        self.cache = {}
+        from tqdm import tqdm
+        for line in tqdm(self.dataset_indexs):
+            if len(line.split()) != 2:
+                continue
+            path, frames = line.split()
+            frames = int(frames)
+            if not os.path.exists(os.path.join(self.root,path)):
+                logging.warning("Path %s not exists" % os.path.join(self.root,path,'measurements_full', "%04d.json" % frames))
+                continue
+            points = []
+            for i in range(frames):
+                route_dir = os.path.join(self.root,path)
+                data = CarlaData(route_dir, i, 
+                                 gen_feature=self.gen_feature,
+                                 seq_len=self.seq_len,
+                                 cache = self.cache)
+                points.append(data.ego_position)
+            self.cache[path] = points
+        json.dump(self.cache,open(os.path.join(self.root,'cache.json'),'w'))
 
     @staticmethod
     def image2topdown_collate_fn(batch):
@@ -117,6 +150,25 @@ class CarlaDataset(Dataset):
                 print('vae_feature:',label.vae_feature.shape)
             raise e
         return (data, label)
+    
+    @staticmethod
+    def vae_measurement2wp_collate_fn(batch):
+        try:
+            data = []
+            data.append(torch.cat([label.vae_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            data.append(torch.cat([torch.cat([data.point_command,data.gt_command_onehot]).unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            label = torch.cat([label.future_waypoints.unsqueeze(0)
+                              for (data, label) in batch], dim=0)
+        except Exception as e:
+            for (data, label) in batch:
+                print("data_path: %s:%d" %(data.root_path,data.idx))
+                print('vae_feature:',label.vae_feature.shape)
+                print('measurement:',torch.cat([data.point_command,data.gt_command_onehot]).shape)
+                print('waypoint:',label.future_waypoints.shape)
+            raise e
+        return (data, label)
 
 if __name__ == '__main__':
     # logging.basicConfig(level=logging.DEBUG)
@@ -132,17 +184,22 @@ if __name__ == '__main__':
     #     print(data[0].shape)
     #     print(data[1].shape)
     #     print(label.shape)
-    dataset = CarlaDataset("E:\\remote\\dataset-full")
-    for data,label in dataset:
-        # if data.gt_command != data.command:
-        #     print(data.root_path,data.idx)
-        if data.command < 1 or data.command > 6:
-            print(data.root_path,data.idx)
-        if data.gt_command < 1 or data.gt_command > 6:
-            print(data.root_path,data.idx)
-    # dataloader = DataLoader(dataset, batch_size=8,shuffle=True, collate_fn=CarlaDataset.image2topdown_collate_fn)
+    dataset = CarlaDataset("E:\\remote\\dataset-full",weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],pred_len=4)
+    from tqdm import tqdm
+    for i in tqdm(range(0,len(dataset))):
+        dataset[i][0].point_command
+    # dataset.gen_cache()
+    # for data,label in dataset:
+    #     # if data.gt_command != data.command:
+    #     #     print(data.root_path,data.idx)
+    #     if data.command < 1 or data.command > 6:
+    #         print(data.root_path,data.idx)
+    #     if data.gt_command < 1 or data.gt_command > 6:
+    #         print(data.root_path,data.idx)
+    # dataloader = DataLoader(dataset, batch_size=8,shuffle=True, collate_fn=CarlaDataset.vae_measurement2wp_collate_fn)
     # for (data, label) in dataloader:
-    #     print(data.shape)
+    #     print(data[0].shape)
+    #     print(data[1].shape)
     #     print(label.shape)
     #     break
     # from tqdm import tqdm

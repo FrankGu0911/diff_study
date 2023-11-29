@@ -15,10 +15,12 @@ class CarlaLabel():
         pred_len: int = 0,
         gen_feature: bool = True,
         vae_model_path: str = None,
+        cache = None
         ):
         self.root_path = path
         self.index = index
         self.pred_len = pred_len
+        self.cache = cache
         self._topdown = None
         self._topdown_onehot = None
         self._vae_feature = None
@@ -143,20 +145,28 @@ class CarlaLabel():
             waypoints.append((way_x,way_y))
         return waypoints
     
+    def GetGPSPoint(self,idx:int):
+        if self.cache is not None:
+            assert isinstance(self.cache,dict)
+            key = "/".join(self.root_path.replace("\\","/").split("/")[-3:])
+            if key in self.cache.keys():
+                x,y,theta = self.cache[key][idx]
+                return x,y,theta
+        measurements = self._LoadJson("measurements_full", idx)
+        x = measurements["gps_x"]
+        y = measurements["gps_y"]
+        theta = measurements["theta"]
+        return x,y,theta
+            
     @property
     def future_waypoints(self):
-        if self._measurements is None:
-            self._measurements = self._LoadJson("measurements_full", self.index)
-        x = self._measurements["gps_x"]
-        y = self._measurements["gps_y"]
-        theta = self._measurements["theta"]
+        x,y,theta = self.GetGPSPoint(self.index)
         waypoints = []
         for i in range(self.pred_len):
-            measurements = self._LoadJson("measurements_full", self.index+i+1)
-            future_x,future_y = measurements["gps_x"],measurements["gps_y"]
+            future_x,future_y,_ = self.GetGPSPoint(self.index+i+1)
             way_x,way_y = self.transform_waypoints(x,y,future_x,future_y,theta)
             waypoints.append((way_x,way_y))
-        return waypoints
+        return torch.Tensor(waypoints)
 
     @property
     def should_break(self):
@@ -245,8 +255,8 @@ class CarlaLabel():
     
 if __name__ == "__main__":
     # a = CarlaLabel("test/data/weather-0/data/routes_town01_long_w0_06_23_01_05_07", 0,vae_model_path='pretrained/vae_one_hot/vae_model_54.pth')
-    a = CarlaLabel("E:\\remote\\dataset-full\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 15,pred_len=4)
-    # print(a.future_waypoints)
+    a = CarlaLabel("E:\\remote\\dataset-full\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 65,pred_len=4)
+    print(a.future_waypoints)
     # print(a.command_waypoints)
-    print(a.measurements_onehot)
-    print(a.measurements_onehot.shape)
+    # print(a.measurements_onehot)
+    # print(a.measurements_onehot.shape)
