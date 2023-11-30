@@ -15,6 +15,8 @@ def SetArgs():
     parser.add_argument("--batch_size",type=int,default=8)
     parser.add_argument("--epoch",type=int,default=35)
     parser.add_argument("--pred_len",type=int,default=4)
+    parser.add_argument("--with_rgb",action="store_true",default=False)
+    parser.add_argument("--with_lidar",action="store_true",default=False)
     parser.add_argument("--autocast",action="store_true",default=False)
     parser.add_argument("--half",action="store_true",default=False)
     return parser.parse_args()
@@ -42,31 +44,37 @@ def latest_model_path(path):
 if __name__ == "__main__":
     args = SetArgs()
     device = torch.device("cuda:0")
-    gru_model = LCDiff_Planner()
+    gru_model = LCDiff_Planner(with_lidar=args.with_lidar,with_rgb=args.with_rgb)
     if args.half:
         gru_model = gru_model.to(torch.bfloat16)
     gru_model = gru_model.to(device)
-    gru_optimizer = torch.optim.AdamW(gru_model.parameters(),lr=1e-5,
+    gru_optimizer = torch.optim.AdamW(gru_model.parameters(),lr=2e-4,
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
                               eps=1e-8)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(gru_optimizer,T_0=30,T_mult=2,eta_min=1e-6)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(gru_optimizer,T_0=25,T_mult=2,eta_min=1e-6)
     train_ds = CarlaDataset('E:\\remote\\dataset-full',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],seq_len=1,pred_len=args.pred_len)
-    val_ds = CarlaDataset('E:\\remote\\dataset-val',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],seq_len=1,pred_len=args.pred_len)
+    val_ds = CarlaDataset('E:\\remote\\dataset-val',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,4,5,6,7,10],seq_len=1,pred_len=args.pred_len)
     train_loader = DataLoader(train_ds,
                               batch_size=args.batch_size,
                               shuffle=True,
-                              collate_fn=CarlaDataset.vae_measurement2wp_collate_fn,
+                              collate_fn=CarlaDataset.vae_clip_lidar_measurement2wp_collate_fn,
                               num_workers=16,
                               pin_memory=True,
                               )
     val_loader = DataLoader(val_ds,
                             batch_size=args.batch_size,
                             shuffle=False,
-                            collate_fn=CarlaDataset.vae_measurement2wp_collate_fn,
+                            collate_fn=CarlaDataset.vae_clip_lidar_measurement2wp_collate_fn,
                             num_workers=16,
-                            pin_memory=True)
-    model_path =os.path.join('pretrained','gru')
+                            pin_memory=True
+                            )
+    model_name = 'gru'
+    if args.with_rgb:
+        model_name+='_rgb'
+    if args.with_lidar:
+        model_name+='_lidar'
+    model_path =os.path.join('pretrained',model_name)
     CheckPath(model_path)
     if args.resume:
         model_param = latest_model_path(model_path)
@@ -83,7 +91,7 @@ if __name__ == "__main__":
     else:
         current_epoch = 0
     logging.info(f"Start at epoch{current_epoch}")
-    log_path = os.path.join('log','gru')
+    log_path = os.path.join('log',model_name)
     CheckPath(log_path)
     writer = SummaryWriter(log_dir=log_path)
     trainer = LCDiffPlannerTrainer(gru_model=gru_model,
@@ -92,6 +100,8 @@ if __name__ == "__main__":
                                     optimizer=gru_optimizer,
                                     lr_scheduler=scheduler,
                                     autocast=args.autocast,
+                                    with_lidar=args.with_lidar,
+                                    with_rgb=args.with_rgb,
                                     writer=writer,
                                     model_save_path=model_path,
                                     dist=False,

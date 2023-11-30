@@ -15,6 +15,8 @@ class LCDiffPlannerTrainer:
                 val_loader:torch.utils.data.DataLoader,
                 optimizer:torch.optim.Optimizer,
                 lr_scheduler:torch.optim.lr_scheduler=None,
+                with_rgb:bool=False,
+                with_lidar:bool=False,
                 autocast:bool=False,
                 writer:SummaryWriter=None,
                 model_save_path:str='pretrained/controlnet',
@@ -44,7 +46,9 @@ class LCDiffPlannerTrainer:
         self.autocast = autocast
         self.writer = writer
         self.model_save_path = model_save_path
-        self.criterion = torch.nn.SmoothL1Loss()
+        self.with_rgb = with_rgb
+        self.with_lidar = with_lidar
+        self.criterion = torch.nn.MSELoss()
 
     def train_one_epoch(self,current_epoch:int):
         logging.info(f"[GPU:{self.gpu_id}] Epoch {current_epoch} | Train Steps: {len(self.train_loader)}")
@@ -63,42 +67,57 @@ class LCDiffPlannerTrainer:
             # measurement_feature: (bs,2+6)
             # label: (bs,4,4,2)
             topdown_feature, measurement_feature = data[0],data[1]
+            rgb_feature = None
+            lidar_feature = None
+            if self.with_rgb:
+                rgb_feature = data[2]
+            if self.with_lidar:
+                lidar_feature = data[3]
             if self.half:
                 topdown_feature = topdown_feature.to(torch.bfloat16).cuda(self.gpu_id)
                 measurement_feature = measurement_feature.to(torch.bfloat16).cuda(self.gpu_id)
                 label = label.to(torch.bfloat16).cuda(self.gpu_id)
+                rgb_feature = rgb_feature.to(torch.bfloat16).cuda(self.gpu_id) if rgb_feature is not None else None
+                lidar_feature = lidar_feature.to(torch.bfloat16).cuda(self.gpu_id) if lidar_feature is not None else None
             else:
                 topdown_feature = topdown_feature.to(torch.float32).cuda(self.gpu_id)
                 measurement_feature = measurement_feature.to(torch.float32).cuda(self.gpu_id)
                 label = label.to(torch.float32).cuda(self.gpu_id)
-            if self.autocast:
-                with autocast():
+                rgb_feature = rgb_feature.to(torch.float32).cuda(self.gpu_id) if rgb_feature is not None else None
+                lidar_feature = lidar_feature.to(torch.float32).cuda(self.gpu_id) if lidar_feature is not None else None
+            with autocast(enabled=self.autocast):
+                if self.with_rgb and self.with_lidar:
+                    out = self.gru(topdown_feature,measurement_feature,
+                                    rgb_feature=rgb_feature,
+                                    lidar_feature=lidar_feature)
+                elif self.with_rgb:
+                    out = self.gru(topdown_feature,measurement_feature,
+                                    rgb_feature=rgb_feature)
+                elif self.with_lidar:
+                    out = self.gru(topdown_feature,measurement_feature,
+                                    lidar_feature=lidar_feature)
+                else:
                     out = self.gru(topdown_feature,measurement_feature)
-                    loss = self.criterion(out,label)
+                loss = self.criterion(out,label)
+            if torch.isnan(loss):
+                tqdm.write("Loss is NaN!")
+            else:
+                train_loss.append(loss.item())
+                if self.autocast:
                     scaler.scale(loss).backward()
                     scaler.step(self.optimizer)
                     scaler.update()
-            else:
-                out = self.gru(topdown_feature,measurement_feature)
-                loss = self.criterion(out,label)
-                self.optimizer.zero_grad()
-                if torch.isnan(loss):
-                    tqdm.write("Loss is NaN!")
-                    loss = torch.tensor(0.0).cuda(self.gpu_id)
                 else:
-                    train_loss.append(loss.item())
-                loss.backward()
-                total_norm = torch.nn.utils.clip_grad_norm_(self.gru.parameters(),max_norm=1)
-                self.optimizer.step()
-            
-            
+                    loss.backward()
+                    self.optimizer.step()
+            self.optimizer.zero_grad()
             if self.gpu_id == 0:
                 if len(train_loss) != 0:
                     avg_loss = sum(train_loss) / len(train_loss)
-                train_loop.set_postfix({"loss":avg_loss,"lr":"%.1e" %self.optimizer.param_groups[0]["lr"],"norm":"%.2f" %total_norm })
+                train_loop.set_postfix({"loss":avg_loss,"lr":"%.1e" %self.optimizer.param_groups[0]["lr"]})
             self.lr_scheduler.step(current_epoch + i / len(self.train_loader))
-            if self.gpu_id == 0 and self.writer is not None:
-                self.writer.add_scalar("train_loss",sum(train_loss)/len(train_loss),current_epoch)
+        if self.gpu_id == 0 and self.writer is not None:
+            self.writer.add_scalar("train_loss",sum(train_loss)/len(train_loss),current_epoch)
 
     def val_one_epoch(self,current_epoch:int):
         self.gru.eval()
@@ -109,16 +128,35 @@ class LCDiffPlannerTrainer:
         val_loss = []
         for (data,label) in val_loop:
             topdown_feature, measurement_feature = data[0],data[1]
+            if self.with_rgb:
+                rgb_feature = data[2]
+            if self.with_lidar:
+                lidar_feature = data[3]
             if self.half:
                 topdown_feature = topdown_feature.to(torch.bfloat16).cuda(self.gpu_id)
                 measurement_feature = measurement_feature.to(torch.bfloat16).cuda(self.gpu_id)
                 label = label.to(torch.bfloat16).cuda(self.gpu_id)
+                rgb_feature = rgb_feature.to(torch.bfloat16).cuda(self.gpu_id) if rgb_feature is not None else None
+                lidar_feature = lidar_feature.to(torch.bfloat16).cuda(self.gpu_id) if lidar_feature is not None else None
             else:
                 topdown_feature = topdown_feature.to(torch.float32).cuda(self.gpu_id)
                 measurement_feature = measurement_feature.to(torch.float32).cuda(self.gpu_id)
                 label = label.to(torch.float32).cuda(self.gpu_id)
+                rgb_feature = rgb_feature.to(torch.float32).cuda(self.gpu_id) if rgb_feature is not None else None
+                lidar_feature = lidar_feature.to(torch.float32).cuda(self.gpu_id) if lidar_feature is not None else None
             with torch.no_grad():
-                out = self.gru(topdown_feature,measurement_feature)
+                if self.with_rgb and self.with_lidar:
+                    out = self.gru(topdown_feature,measurement_feature,
+                                    rgb_feature=rgb_feature,
+                                    lidar_feature=lidar_feature)
+                elif self.with_rgb:
+                    out = self.gru(topdown_feature,measurement_feature,
+                                    rgb_feature=rgb_feature)
+                elif self.with_lidar:
+                    out = self.gru(topdown_feature,measurement_feature,
+                                    lidar_feature=lidar_feature)
+                else:
+                    out = self.gru(topdown_feature,measurement_feature)
                 loss = self.criterion(out,label)
             if torch.isnan(loss):
                 tqdm.write("Loss is NaN!")
