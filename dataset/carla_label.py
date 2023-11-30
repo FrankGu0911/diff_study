@@ -18,6 +18,7 @@ class CarlaLabel():
         cache = None
         ):
         self.root_path = path
+        self.relative_path = "/".join(self.root_path.replace("\\","/").split("/")[-3:])
         self.index = index
         self.pred_len = pred_len
         self.cache = cache
@@ -150,7 +151,7 @@ class CarlaLabel():
             assert isinstance(self.cache,dict)
             key = "/".join(self.root_path.replace("\\","/").split("/")[-3:])
             if key in self.cache.keys():
-                x,y,theta = self.cache[key][idx]
+                x,y,theta = self.cache[key]['po'][idx]
                 return x,y,theta
         measurements = self._LoadJson("measurements_full", idx)
         x = measurements["gps_x"]
@@ -250,7 +251,7 @@ class CarlaLabel():
             return torch.Tensor([0,1])
     
     @property
-    def measurements_onehot(self):
+    def stop_reason_onehot(self):
         return torch.cat([self.should_break,self.should_slow,self.is_junction,self.is_vehicle_present,self.is_bike_present,self.is_lane_vehicle_present,self.is_junction_vehicle_present,self.is_pedestrian_present,self.is_red_light_present],dim=0).to(torch.float32)
     
 if __name__ == "__main__":

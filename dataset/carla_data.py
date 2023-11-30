@@ -265,11 +265,22 @@ class CarlaData():
                     torch.save(self._clip_feature, os.path.join(self.root_path, "clip_feature", "%04d.pt" % self.idx))
         return self._clip_feature
 
+    def GetGPSPoint(self,idx:int):
+        if self.cache is not None:
+            assert isinstance(self.cache,dict)
+            key = self.relative_path
+            if key in self.cache.keys():
+                x,y,theta = self.cache[key]['po'][idx]
+                return x,y,theta
+        measurements = self._LoadJson("measurements_full", idx)
+        x = measurements["gps_x"]
+        y = measurements["gps_y"]
+        theta = measurements["theta"]
+        return x,y,theta
+    
     @property
     def ego_position(self):
-        if self._measurements is None:
-            self._measurements = self._LoadJson("measurements_full", self.idx)
-        (x,y,theta) = self._measurements["gps_x"],self._measurements["gps_y"],self._measurements["theta"]
+        (x,y,theta) = self.GetGPSPoint(self.idx)
         if np.isnan(theta):
             print(self.root_path,self.idx)
             with open("log/data.log","a") as f:
@@ -296,7 +307,6 @@ class CarlaData():
                     theta = (theta1 + theta2) / 2
             self._measurements["theta"] = theta
             json.dump(self._measurements,open(os.path.join(self.root_path, "measurements_full", "%04d.json" % self.idx),'w'))
-    
         return (x,y,theta)
     
     @property
@@ -377,6 +387,15 @@ class CarlaData():
         if torch.isnan(ret).any():
             raise ValueError("gt_command_onehot is nan")
         return ret
+    
+    @property
+    def measurements_feature(self):
+        if self.cache is not None:
+            assert isinstance(self.cache,dict)
+            key = self.relative_path
+            if key in self.cache.keys():
+                return torch.tensor(self.cache[key]['me'][self.idx]).to(torch.float32)
+        return torch.cat([self.point_command,self.gt_command_onehot])
     
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
