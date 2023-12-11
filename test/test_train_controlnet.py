@@ -87,9 +87,11 @@ if __name__ == "__main__":
         controlnet_model.load_state_dict(checkpoint["model_state_dict"])
         controlnet_optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         checkpoint = None
+        resume = True
         torch.cuda.empty_cache()
     else:
         current_epoch = 0
+        resume = False
     logging.info(f"Start at epoch{current_epoch}")
     log_path = os.path.join("log",'controlnet')
     CheckPath(log_path)
@@ -104,5 +106,6 @@ if __name__ == "__main__":
                                 writer=writer,
                                 model_save_path=model_path,
                                 dist=False,
-                                half=args.half)
+                                half=args.half,
+                                resume=resume)
     trainer.train(current_epoch,max_epoch=args.epoch)

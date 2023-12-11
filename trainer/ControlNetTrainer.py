@@ -21,7 +21,8 @@ class ControlNetTrainer:
                 writer:SummaryWriter=None,
                 model_save_path:str='pretrained/controlnet',
                 dist:bool=False,
-                half:bool=False):
+                half:bool=False,
+                resume:bool=False):
         if dist:
             self.gpu_id = int(os.environ["LOCAL_RANK"])
         else:
@@ -37,7 +38,8 @@ class ControlNetTrainer:
         else:
             self.unet = unet_model
             self.controlnet = controlnet_model
-        self.controlnet.load_unet_param(self.unet)
+        if not resume:
+            self.controlnet.load_unet_param(self.unet)
         self.unet.requires_grad_(False)
         self.unet = self.unet.cuda(self.gpu_id)
         self.controlnet = self.controlnet.cuda(self.gpu_id)
