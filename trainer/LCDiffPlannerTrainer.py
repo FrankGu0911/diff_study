@@ -128,6 +128,7 @@ class LCDiffPlannerTrainer:
         val_loss = []
         for (data,label) in val_loop:
             topdown_feature, measurement_feature = data[0],data[1]
+            rgb_feature, lidar_feature = None, None
             if self.with_rgb:
                 rgb_feature = data[2]
             if self.with_lidar:
