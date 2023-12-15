@@ -65,6 +65,7 @@ class DiffusionTrainer:
     def train_one_epoch(self,current_epoch:int):
         logging.info(f"[GPU:{self.gpu_id}] Epoch {current_epoch} | Train Steps: {len(self.train_loader)}")
         self.model.train()
+        torch.manual_seed(2023)
         if self.gpu_id == 0:
             train_loop = tqdm(self.train_loader,
                               desc="Train Epoch {}".format(current_epoch),
@@ -161,6 +162,7 @@ class DiffusionTrainer:
 
     def val_one_epoch(self,current_epoch:int):
         self.model.eval()
+        torch.manual_seed(2023)
         if self.gpu_id == 0:
             val_loop = tqdm(self.val_loader,desc="Val Epoch {}".format(current_epoch),total=len(self.val_loader))
         else:
@@ -176,6 +178,11 @@ class DiffusionTrainer:
                 if self.with_lidar:
                     lidar = lidar.to(torch.bfloat16).cuda(self.gpu_id)
                 label = label.to(torch.bfloat16).cuda(self.gpu_id)
+            else:
+                data = data.cuda(self.gpu_id)
+                if self.with_lidar:
+                    lidar = lidar.cuda(self.gpu_id)
+                label = label.cuda(self.gpu_id)
             noise = torch.randn_like(label)
             noise_step = torch.randint(0, 1000, (data.shape[0], )).long().cuda(self.gpu_id)
             z_noise = self.scheduler.add_noise(label, noise, noise_step)
