@@ -39,6 +39,7 @@ class ControlNetTrainer:
             self.unet = unet_model
             self.controlnet = controlnet_model
         if not resume:
+            logging.info("Start epoch 0, Load pretrained unet model.")
             self.controlnet.load_unet_param(self.unet)
         self.unet.requires_grad_(False)
         self.unet = self.unet.cuda(self.gpu_id)
@@ -123,8 +124,8 @@ class ControlNetTrainer:
                     avg_loss = sum(train_loss) / len(train_loss)
                 train_loop.set_postfix({"loss":avg_loss,"lr":"%.1e" %self.optimizer.param_groups[0]["lr"] })
             self.lr_scheduler.step(current_epoch + i / len(self.train_loader))
-            if self.gpu_id == 0 and self.writer is not None:
-                self.writer.add_scalar("train_loss",sum(train_loss)/len(train_loss),current_epoch)
+        if self.gpu_id == 0 and self.writer is not None:
+            self.writer.add_scalar("train_loss",sum(train_loss)/len(train_loss),current_epoch)
 
     def val_one_epoch(self,current_epoch:int):
         self.controlnet.eval()

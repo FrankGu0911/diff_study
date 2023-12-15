@@ -52,20 +52,20 @@ if __name__ == "__main__":
                               weight_decay=0.01,
                               eps=1e-8)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=30,T_mult=2,eta_min=1e-5)
-    train_ds = CarlaDataset('test/data',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10])
+    train_ds = CarlaDataset('/root/autodl-tmp/remote/dataset-full',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10])
     # train_ds = CarlaDataset('/data/zjw/frank/dataset-remote/dataset-full',weathers=[4],towns=[1])
-    val_ds = CarlaDataset('test/data',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10])
+    val_ds = CarlaDataset('/root/autodl-tmp/remote/dataset-val',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10])
     if args.lidar:
         train_loader = DataLoader(train_ds,
                                 batch_size=args.batch_size,
-                                shuffle=True,
+                                shuffle=False,
                                 collate_fn=CarlaDataset.clip_lidar_feature2vae_feature_collate_fn,
                                 pin_memory=True,
                                 num_workers=16,
                                 )
         val_loader = DataLoader(val_ds,
                                 batch_size=args.batch_size,
-                                shuffle=True,
+                                shuffle=False,
                                 collate_fn=CarlaDataset.clip_lidar_feature2vae_feature_collate_fn,
                                 pin_memory=True,
                                 num_workers=16,
@@ -104,6 +104,8 @@ if __name__ == "__main__":
         torch.cuda.empty_cache()
     else:
         current_epoch = 0
+    if not args.half:
+        unet_model = unet_model.to(torch.float32)
     logging.info(f"Start at epoch{current_epoch}")
     if args.lidar:
         log_path = os.path.join("log",'diffusion_lidar')
