@@ -73,6 +73,7 @@ class DiffusionTrainer:
         else:
             train_loop = self.train_loader
         train_loss = []
+        cur_loss = []
         scaler = GradScaler()
         for i,(data,label) in enumerate(train_loop):
             # no_lidar
@@ -145,11 +146,16 @@ class DiffusionTrainer:
                 tqdm.write("Loss is NaN!")
             else:
                 train_loss.append(loss.item())
+            if i % 100 == 0:
+                cur_loss = []
+            cur_loss.append(loss.item())
             if self.gpu_id == 0:
                 if len(train_loss) != 0:
                     avg_loss = sum(train_loss)/len(train_loss)
                 train_loop.set_postfix({"loss":avg_loss,"lr":"%.1e" %self.optimizer.param_groups[0]["lr"] })
             self.lr_scheduler.step(current_epoch + i / len(self.train_loader))
+            if self.gpu_id == 0 and self.writer is not None and i % 100 == 0:
+                self.writer.add_scalar("train_loss_%d" %current_epoch,sum(cur_loss)/len(cur_loss),i)
         if self.gpu_id == 0 and self.writer is not None:
             self.writer.add_scalar("train_loss",sum(train_loss)/len(train_loss),current_epoch)
 
