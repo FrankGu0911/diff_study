@@ -47,11 +47,11 @@ if __name__ == "__main__":
     if args.half:
         unet_model = unet_model.to(torch.bfloat16)
     unet_model = unet_model.to(device)
-    unet_optimizer = torch.optim.AdamW(unet_model.parameters(),lr=1e-4,
+    unet_optimizer = torch.optim.AdamW(unet_model.parameters(),lr=5e-5,
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
                               eps=1e-8)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=30,T_mult=2,eta_min=1e-5)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=args.epoch,T_mult=2,eta_min=1e-5)
     train_ds = CarlaDataset('/root/autodl-tmp/remote/dataset-full',
                             weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
                             towns=[1,2,3,4,5,6,7,10],
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     if args.lidar:
         train_loader = DataLoader(train_ds,
                                 batch_size=args.batch_size,
-                                shuffle=False,
+                                shuffle=True,
                                 collate_fn=CarlaDataset.clip_lidar_feature2vae_feature_collate_fn,
                                 pin_memory=True,
                                 num_workers=16,
@@ -86,7 +86,7 @@ if __name__ == "__main__":
                                 )
         val_loader = DataLoader(val_ds,
                                 batch_size=args.batch_size,
-                                shuffle=True,
+                                shuffle=False,
                                 collate_fn=CarlaDataset.clip_feature2vae_feature_collate_fn,
                                 pin_memory=True,
                                 num_workers=16,

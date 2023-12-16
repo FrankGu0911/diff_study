@@ -168,6 +168,7 @@ class DiffusionTrainer:
         else:
             val_loop = self.val_loader
         val_loss = []
+        cur_loss = []
         for (data,label) in val_loop:
             if self.with_lidar:
                 data, lidar = data[0].cuda(self.gpu_id),data[1]
@@ -196,10 +197,15 @@ class DiffusionTrainer:
                     tqdm.write("Loss is NaN!")
                 else:
                     val_loss.append(loss.item())
+                if len(val_loss) % 100 == 0:
+                    cur_loss = []
+                cur_loss.append(loss.item())
                 if self.gpu_id == 0:
                     if len(val_loss) != 0:
                         avg_loss = sum(val_loss)/len(val_loss)
                     val_loop.set_postfix({"loss":avg_loss})
+            if self.gpu_id == 0 and self.writer is not None and len(val_loss) % 100 == 0:
+                self.writer.add_scalar("val_loss_%d" %current_epoch,sum(cur_loss)/len(cur_loss),len(val_loss))
         if self.gpu_id == 0 and self.writer is not None:
             self.writer.add_scalar("val_loss",sum(val_loss)/len(val_loss),current_epoch)
 
