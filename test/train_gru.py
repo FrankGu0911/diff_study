@@ -4,7 +4,7 @@ from torch.utils.tensorboard import SummaryWriter
 sys.path.append('.')
 sys.path.append('./models')
 sys.path.append('./dataset')
-from models.gru import LCDiff_Planner
+from models.gru import GRU
 from dataset.carla_dataset import CarlaDataset
 from trainer.LCDiffPlannerTrainer import LCDiffPlannerTrainer
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -44,7 +44,7 @@ def latest_model_path(path):
 if __name__ == "__main__":
     args = SetArgs()
     device = torch.device("cuda:0")
-    gru_model = LCDiff_Planner(with_lidar=args.with_lidar,with_rgb=args.with_rgb)
+    gru_model = GRU(with_lidar=args.with_lidar,with_rgb=args.with_rgb)
     if args.half:
         gru_model = gru_model.to(torch.bfloat16)
     gru_model = gru_model.to(device)

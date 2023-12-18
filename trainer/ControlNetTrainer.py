@@ -102,7 +102,7 @@ class ControlNetTrainer:
                     out_control_down, out_control_mid = self.controlnet(z_noise,data,noise_step,lidar)
                     out_unet = self.unet(z_noise,data,noise_step,
                                          down_block_additional_residuals = out_control_down,
-                                         mid_block_additional_residuals = out_control_mid)
+                                         mid_block_additional_residual = out_control_mid)
                     loss = self.criterion(out_unet,noise)
                     scaler.scale(loss).backward()
                     scaler.step(self.optimizer)

@@ -43,7 +43,7 @@ def latest_model_path(path):
 if __name__ == "__main__":
     args = SetArgs()
     device = torch.device("cuda:0")
-    unet_model_path = "pretrained/diffusion/diffusion_model_5.pth"
+    unet_model_path = "pretrained/diffusion/diffusion_model_36.pth"
     unet_model = UNet()
     controlnet_model = ControlNet()
     if args.half:
@@ -56,9 +56,9 @@ if __name__ == "__main__":
                               weight_decay=0.01,
                               eps=1e-8)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(controlnet_optimizer,T_0=30,T_mult=2,eta_min=1e-5)
-    train_ds = CarlaDataset('test/data',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10])
+    train_ds = CarlaDataset('E:\\remote\\dataset-full',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],interval_frame=5)
     # train_ds = CarlaDataset('/data/zjw/frank/dataset-remote/dataset-full',weathers=[4],towns=[1])
-    val_ds = CarlaDataset('test/data',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10])
+    val_ds = CarlaDataset('E:\\remote\\dataset-val',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],interval_frame=2)
     train_loader = DataLoader(train_ds,
                             batch_size=args.batch_size,
                             shuffle=True,

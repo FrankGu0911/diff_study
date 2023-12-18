@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-class LCDiff_Planner(nn.Module):
+class GRU(nn.Module):
     def __init__(self,pred_len=4,with_rgb=False,with_lidar=False):
         super().__init__()
         self.pred_len = pred_len
@@ -121,7 +121,7 @@ class LCDiff_Planner(nn.Module):
         return output
 
 if __name__ == "__main__":
-    model = LCDiff_Planner(with_lidar=False,with_rgb=True)
+    model = GRU(with_lidar=False,with_rgb=True)
     topdown_feature = torch.randn(4,4,32,32).to(torch.float32)
     measurement_feature = torch.randn(4,2+6).to(torch.float32)
     rgb_feature = torch.randn(4,4,768).to(torch.float32)
