@@ -55,23 +55,23 @@ if __name__ == "__main__":
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
                               eps=1e-8)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(controlnet_optimizer,T_0=30,T_mult=2,eta_min=1e-5)
-    train_ds = CarlaDataset('E:\\remote\\dataset-full',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],interval_frame=5)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(controlnet_optimizer,T_0=args.epoch,T_mult=2,eta_min=1e-6)
+    train_ds = CarlaDataset('/root/autodl-tmp/remote/dataset-full',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],interval_frame=4)
     # train_ds = CarlaDataset('/data/zjw/frank/dataset-remote/dataset-full',weathers=[4],towns=[1])
-    val_ds = CarlaDataset('E:\\remote\\dataset-val',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],interval_frame=2)
+    val_ds = CarlaDataset('/root/autodl-tmp/remote/dataset-val',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],interval_frame=2)
     train_loader = DataLoader(train_ds,
                             batch_size=args.batch_size,
                             shuffle=True,
                             collate_fn=CarlaDataset.clip_lidar2d_feature2vae_feature_collate_fn,
                             pin_memory=True,
-                            num_workers=8,
+                            num_workers=16,
                             )
     val_loader = DataLoader(val_ds,
                             batch_size=args.batch_size,
                             shuffle=True,
                             collate_fn=CarlaDataset.clip_lidar2d_feature2vae_feature_collate_fn,
                             pin_memory=True,
-                            num_workers=8,
+                            num_workers=16,
                             )
     unet_model.load_state_dict(torch.load(unet_model_path,map_location=device)["model_state_dict"])
     model_path = os.path.join("pretrained",'controlnet')
@@ -92,6 +92,9 @@ if __name__ == "__main__":
     else:
         current_epoch = 0
         resume = False
+    if not args.half:
+        unet_model = unet_model.to(torch.float32)
+        controlnet_model = controlnet_model.to(torch.float32)
     logging.info(f"Start at epoch{current_epoch}")
     log_path = os.path.join("log",'controlnet')
     CheckPath(log_path)
