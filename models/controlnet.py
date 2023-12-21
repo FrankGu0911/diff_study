@@ -349,6 +349,8 @@ class ControlNet(torch.nn.Module):
 
         # condition embed
         self.condition_embed = torch.nn.Sequential(
+            torch.nn.GroupNorm(num_groups=3,num_channels=3,eps=1e-6,affine=True),
+            torch.nn.SiLU(),
             torch.nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1),
             torch.nn.SiLU(),
             torch.nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1),
@@ -412,6 +414,7 @@ class ControlNet(torch.nn.Module):
             time = time.to(torch.bfloat16)
         time = self.in_time(time)
         # condition [1, 3, 256, 256] -> [1, 320, 32, 32]
+        # group norm
         condition = self.condition_embed(condition)
         out_vae = out_vae + condition
         # unet down
