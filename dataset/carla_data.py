@@ -213,16 +213,25 @@ class CarlaData():
         return features
 
     def lidar_2d_feature(self, lidar:np.ndarray):
-        point = lidar[:,:3]
-        point = point[(point[:,2] > -2.0)] # above road
-        point = point[(point[:,0] > -22.5)]
-        point = point[(point[:,0] < 22.5)]
-        point = point[(point[:,1] < 45)]
-        point = point[(point[:,1] > 0)]
-        histogram = np.zeros((256,256))
-        for p in point:
-            histogram[int((45-p[1])/45*256),int((p[0]+22.5)/45*256)] = 255
-        return histogram
+        lidar_raw = lidar[:,:3]
+        lidar_raw[:,0] = -lidar_raw[:,0]
+        lidar_raw = lidar_raw[(lidar_raw[:,0] > -22.5)]
+        lidar_raw = lidar_raw[(lidar_raw[:,0] < 22.5)]
+        lidar_raw = lidar_raw[(lidar_raw[:,1] < 45)]
+        lidar_raw = lidar_raw[(lidar_raw[:,1] > 0)]
+        lidar_down = lidar_raw[(lidar_raw[:,2] <= -2.3)]
+        lidar_middle = lidar_raw[(lidar_raw[:,2] > -2.3)]
+        lidar_middle = lidar_middle[(lidar_middle[:,2] < 1)]
+        lidar_up = lidar_raw[(lidar_raw[:,2] > 1)]
+        lidar_2d = np.zeros((3,256,256),dtype=np.uint8)
+        for p in lidar_down:
+            lidar_2d[0][int((45-p[1])/45*256)][int((p[0]+22.5)/45*256)] += 1
+        for p in lidar_middle:
+            lidar_2d[1][int((45-p[1])/45*256)][int((p[0]+22.5)/45*256)] += 1
+        for p in lidar_up:
+            lidar_2d[2][int((45-p[1])/45*256)][int((p[0]+22.5)/45*256)] += 1
+        # lidar_2d = np.transpose(lidar_2d,(1,2,0))
+        return lidar_2d
 
     @property
     def lidar_2d(self):
@@ -233,13 +242,11 @@ class CarlaData():
                 if self._lidar is None:
                     self._lidar = self._LoadNpy("lidar", self.idx)
                 histogram = self.lidar_2d_feature(self._lidar)
-                self._lidar_2d = Image.fromarray(histogram).convert('L')
+                self._lidar_2d = Image.fromarray(histogram)
                 if not os.path.exists(os.path.join(self.root_path, "lidar_2d")):
                     os.makedirs(os.path.join(self.root_path, "lidar_2d"))
                 self._lidar_2d.save(os.path.join(self.root_path, "lidar_2d", "%04d.png" % self.idx))
         ret = ToTensor()(self._lidar_2d)
-        if ret.shape[0] == 1:
-            ret = torch.cat((ret, ret, ret))
         return ret
 
     @property
