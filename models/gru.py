@@ -99,7 +99,7 @@ class GRU(nn.Module):
         # topdown_feature: (bs,4,32,32)
         # measurement_feature: (bs,2+6)
         # rgb_feature: (bs,4,768)
-        # lidar_feature: (bs,1,256,256)
+        # lidar_feature: (bs,3,256,256)
         #flatten
         bs = topdown_feature.shape[0]
         topdown_feature = topdown_feature.view(bs,-1)

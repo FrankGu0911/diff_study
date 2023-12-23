@@ -59,14 +59,14 @@ if __name__ == "__main__":
                               batch_size=args.batch_size,
                               shuffle=True,
                               collate_fn=CarlaDataset.vae_clip_lidar_measurement2wp_collate_fn,
-                              num_workers=16,
+                              num_workers=8,
                               pin_memory=True,
                               )
     val_loader = DataLoader(val_ds,
                             batch_size=args.batch_size,
                             shuffle=False,
                             collate_fn=CarlaDataset.vae_clip_lidar_measurement2wp_collate_fn,
-                            num_workers=16,
+                            num_workers=8,
                             pin_memory=True
                             )
     model_name = 'gru'

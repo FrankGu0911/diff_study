@@ -21,6 +21,7 @@ class DiffusionTrainer:
                 accumulation:int=1,
                 writer:SummaryWriter=None,
                 model_save_path:str='pretrained/diffusion',
+                interval_frame:int=1,
                 dist:bool=True,
                 half:bool=False):
         if dist:
@@ -44,6 +45,7 @@ class DiffusionTrainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.dist = dist
+        self.interval_frame = interval_frame
         if dist:
             self.model = DDP(self.model,device_ids=[self.gpu_id])
         self.autocast = autocast
@@ -65,7 +67,7 @@ class DiffusionTrainer:
     def train_one_epoch(self,current_epoch:int):
         logging.info(f"[GPU:{self.gpu_id}] Epoch {current_epoch} | Train Steps: {len(self.train_loader)}")
         self.model.train()
-        torch.manual_seed(2023)
+        # torch.manual_seed(2023)
         if self.gpu_id == 0:
             train_loop = tqdm(self.train_loader,
                               desc="Train Epoch {}".format(current_epoch),
@@ -84,6 +86,8 @@ class DiffusionTrainer:
             # data[0] -> (batch_size, 4, 768)
             # data[1] -> (batch_size, 3, 256, 256)
             # label -> (batch_size, 4, 32, 32)
+            if i % self.interval_frame != 0:
+                continue
             if self.with_lidar:
                 data, lidar = data[0],data[1]
             else:
@@ -162,14 +166,16 @@ class DiffusionTrainer:
 
     def val_one_epoch(self,current_epoch:int):
         self.model.eval()
-        torch.manual_seed(2023)
+        # torch.manual_seed(2023)
         if self.gpu_id == 0:
             val_loop = tqdm(self.val_loader,desc="Val Epoch {}".format(current_epoch),total=len(self.val_loader))
         else:
             val_loop = self.val_loader
         val_loss = []
         cur_loss = []
-        for (data,label) in val_loop:
+        for i,(data,label) in enumerate(val_loop):
+            if i % self.interval_frame != 0:
+                continue
             if self.with_lidar:
                 data, lidar = data[0].cuda(self.gpu_id),data[1]
             else:

@@ -47,7 +47,7 @@ def cvt_rgb_seg(seg:np.ndarray):
     return seg
 
 vae_model = VAE(26,26).to(device)
-model = torch.load('pretrained/vae_one_hot/vae_model_10.pth')['model_state_dict']
+model = torch.load('pretrained/vae_model/vae_model_69.pth')['model_state_dict']
 vae_model.load_state_dict(model)
 
 ds = CarlaTopDownDataset('test/data',onehot=True,weathers=[0],base_weight=1,diff_weight=100)

@@ -56,12 +56,12 @@ def check_path(path):
         os.makedirs(path)
     return path
 vae_model = VAE(26,26).to(device)
-vae_param = torch.load('pretrained/vae_model/vae_model_60.pth',map_location=device)['model_state_dict']
+vae_param = torch.load('pretrained/vae_model/vae_model_69.pth',map_location=device)['model_state_dict']
 vae_model.load_state_dict(vae_param)
 vae_model.eval()
 
 UNet_model = UNet(with_lidar=False).to(device)
-UNet_param = torch.load('pretrained/diffusion/diffusion_model_36.pth',map_location=device)['model_state_dict']
+UNet_param = torch.load('pretrained/diffusion/diffusion_model_39.pth',map_location=device)['model_state_dict']
 UNet_model.load_state_dict(UNet_param)
 UNet_model.eval()
 scheduler = PNDMScheduler(
@@ -91,7 +91,7 @@ ds = CarlaDataset('E:\\dataset-val',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],t
 SAVE_NAME = "lidar@9"
 diff_step = 20
 save_path = os.path.join("test/infer", "_".join([SAVE_NAME, str(diff_step)]))
-torch.manual_seed(2023)
+# torch.manual_seed(2023)
 check_path(save_path)
 check_path(os.path.join(save_path,"result"))
 check_path(os.path.join(save_path,"gt"))
@@ -127,9 +127,9 @@ for i,(data,label) in enumerate(ds):
         # lidar = torch.cat((neg_lidar,lidar),dim=0)
         vae_feature = label.vae_feature.unsqueeze(0).to(device)
         pos_clip_feature = clip_encoder.encode_image(image_full_tensor).unsqueeze(0)
-        # neg_clip_feature = clip_encoder.encode_image(torch.zeros_like(image_full_tensor)).unsqueeze(0)
-        # out_clip_feature = torch.cat((neg_clip_feature,pos_clip_feature),dim=0).to(torch.float32)
-        out_clip_feature = pos_clip_feature.to(torch.float32)
+        neg_clip_feature = clip_encoder.encode_image(torch.zeros_like(image_full_tensor)).unsqueeze(0)
+        out_clip_feature = torch.cat((neg_clip_feature,pos_clip_feature),dim=0).to(torch.float32)
+        out_clip_feature = out_clip_feature.to(torch.float32)
         out_vae = torch.randn(1,4,32,32).to(device)
         if half:
             out_vae = out_vae.to(torch.bfloat16)
@@ -142,14 +142,14 @@ for i,(data,label) in enumerate(ds):
         scheduler.set_timesteps(diff_step, device=device)
         start_time = time.time()
         for cur_time in scheduler.timesteps:
-            # cur_time_in = torch.cat((cur_time.unsqueeze(0),cur_time.unsqueeze(0)),dim=0)
+            cur_time_in = torch.cat((cur_time.unsqueeze(0),cur_time.unsqueeze(0)),dim=0)
             cur_time_in = cur_time.unsqueeze(0)
-            # noise = torch.cat((out_vae,out_vae),dim=0)
-            noise = out_vae
+            noise = torch.cat((out_vae,out_vae),dim=0)
+            # noise = out_vae
             noise = scheduler.scale_model_input(noise, cur_time)
             pred_noise = UNet_model(out_vae=noise,out_encoder=out_clip_feature,time=cur_time_in)
             # pred_noise = pred_noise[1]
-            # pred_noise = pred_noise[0] + 2 * (pred_noise[1] - pred_noise[0])
+            pred_noise = pred_noise[0] + 2 * (pred_noise[1] - pred_noise[0])
             out_vae = scheduler.step(pred_noise, cur_time,out_vae).prev_sample
         # out_vae = 1 / 0.18215 * out_vae
         out_vae = vae_model.decoder(out_vae).squeeze(0)

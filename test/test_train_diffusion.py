@@ -15,6 +15,7 @@ def SetArgs():
     parser.add_argument("--resume",action="store_true",default=False)
     parser.add_argument("--batch_size",type=int,default=8)
     parser.add_argument("--epoch",type=int,default=35)
+    parser.add_argument("--interval",type=int,default=1)
     parser.add_argument("--autocast",action="store_true",default=False)
     parser.add_argument("--lidar",action="store_true",default=False)
     parser.add_argument("--half",action="store_true",default=False)
@@ -51,30 +52,28 @@ if __name__ == "__main__":
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
                               eps=1e-8)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=args.epoch,T_mult=2,eta_min=1e-5)
-    train_ds = CarlaDataset('/root/autodl-tmp/remote/dataset-full',
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=args.epoch,T_mult=2,eta_min=1e-6)
+    train_ds = CarlaDataset('E:/remote/dataset-full',
                             weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
-                            towns=[1,2,3,4,5,6,7,10],
-                            interval_frame=4)
+                            towns=[1,2,3,4,5,6,7,10])
     # train_ds = CarlaDataset('/data/zjw/frank/dataset-remote/dataset-full',weathers=[4],towns=[1])
-    val_ds = CarlaDataset('/root/autodl-tmp/remote/dataset-val',
+    val_ds = CarlaDataset('E:/remote/dataset-val',
                           weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
-                          towns=[1,2,3,4,5,6,7,10],
-                          interval_frame=4)
+                          towns=[1,2,3,4,5,6,7,10])
     if args.lidar:
         train_loader = DataLoader(train_ds,
                                 batch_size=args.batch_size,
                                 shuffle=True,
                                 collate_fn=CarlaDataset.clip_lidar_feature2vae_feature_collate_fn,
                                 pin_memory=True,
-                                num_workers=16,
+                                num_workers=8,
                                 )
         val_loader = DataLoader(val_ds,
                                 batch_size=args.batch_size,
                                 shuffle=False,
                                 collate_fn=CarlaDataset.clip_lidar_feature2vae_feature_collate_fn,
                                 pin_memory=True,
-                                num_workers=16,
+                                num_workers=8,
                                 )
     else:
         train_loader = DataLoader(train_ds,
@@ -82,14 +81,14 @@ if __name__ == "__main__":
                                 shuffle=True,
                                 collate_fn=CarlaDataset.clip_feature2vae_feature_collate_fn,
                                 pin_memory=True,
-                                num_workers=16,
+                                num_workers=8,
                                 )
         val_loader = DataLoader(val_ds,
                                 batch_size=args.batch_size,
                                 shuffle=False,
                                 collate_fn=CarlaDataset.clip_feature2vae_feature_collate_fn,
                                 pin_memory=True,
-                                num_workers=16,
+                                num_workers=8,
                                 )
     if args.lidar:
         model_path = os.path.join("pretrained",'diffusion_lidar')
@@ -129,5 +128,6 @@ if __name__ == "__main__":
                                 model_save_path=model_path,
                                 dist=False,
                                 with_lidar=args.lidar,
-                                half=args.half)
+                                half=args.half,
+                                interval_frame=args.interval)
     trainer.train(current_epoch,max_epoch=args.epoch)
