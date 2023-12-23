@@ -154,8 +154,8 @@ class CarlaDataset(Dataset):
         except Exception as e:
             for (data, label) in batch:
                 print("data_path: %s:%d" %(data.root_path,data.idx))
-                print('clip_feature:',data.clip_feature.shape)
-                print('vae_feature:',label.vae_feature.shape)
+                print('lidar2d_feature:',data.lidar_2d.shape)
+                # print('vae_feature:',label.vae_feature.shape)
             raise e
         return (data, label)
     
