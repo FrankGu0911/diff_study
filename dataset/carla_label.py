@@ -12,7 +12,7 @@ class CarlaLabel():
         important_seg: list = [4,19,23],
         base_weight: int = 1,
         diff_weight: int = 100,
-        pred_len: int = 0,
+        pred_len: int = 1,
         gen_feature: bool = True,
         vae_model_path: str = None,
         cache = None
@@ -168,6 +168,23 @@ class CarlaLabel():
             way_x,way_y = self.transform_waypoints(x,y,future_x,future_y,theta)
             waypoints.append((way_x,way_y))
         return torch.Tensor(waypoints)
+    
+    @property
+    def command_waypoints(self):
+        if self._measurements is None:
+            self._measurements = self._LoadJson("measurements_full", self.index)
+        
+        x = self._measurements["gps_x"]
+        y = self._measurements["gps_y"]
+        theta = self._measurements["theta"]
+        command_waypoints = []
+        for i in range(min(self.pred_len, len(self._measurements["future_waypoints"]))):
+            waypoint = self._measurements["future_waypoints"][i]
+            way_x,way_y = self.transform_waypoints(x,y,waypoint[0],waypoint[1],theta)
+            command_waypoints.append((way_x,way_y))
+        for i in range(self.pred_len-len(self._measurements["future_waypoints"])):
+            command_waypoints.append((10000,10000))
+        return torch.Tensor(command_waypoints)
 
     @property
     def should_break(self):

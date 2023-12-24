@@ -200,6 +200,33 @@ class CarlaDataset(Dataset):
                 print('waypoint:',label.future_waypoints.shape)
             raise e
         return (data, label)
+    
+    @staticmethod
+    def vae_clip_lidar_measurement2cmdwp_collate_fn(batch):
+        try:
+            data = []
+            data.append(torch.cat([label.vae_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            data.append(torch.cat([data.measurements_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            data.append(torch.cat([data.clip_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            data.append(torch.cat([data.lidar_2d.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            label = []
+            label.append(torch.cat([label.command_waypoints.unsqueeze(0)
+                              for (data, label) in batch], dim=0))
+            label.append(torch.cat([label.stop_reason_onehot.unsqueeze(0)
+                              for (data, label) in batch], dim=0))
+        except Exception as e:
+            for (data, label) in batch:
+                print("data_path: %s:%d" %(data.root_path,data.idx))
+                print('vae_feature:',label.vae_feature.shape)
+                print('measurement:',torch.cat([data.point_command,data.gt_command_onehot]).shape)
+                print('waypoint:',label.command_waypoints.shape)
+                print('stop_reason:',label.stop_reason_onehot.shape)
+            raise e
+        return (data, label)
 
 if __name__ == '__main__':
     # logging.basicConfig(level=logging.DEBUG)
@@ -215,7 +242,7 @@ if __name__ == '__main__':
     #     print(data[0].shape)
     #     print(data[1].shape)
     #     print(label.shape)
-    dataset = CarlaDataset("E:\\remote\\dataset-full",weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],pred_len=4)
+    dataset = CarlaDataset("/mnt/e/remote/dataset-full",weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],pred_len=4)
     # from tqdm import tqdm
     # for i in tqdm(range(0,len(dataset))):
     #     dataset[i][0].point_command
@@ -227,11 +254,14 @@ if __name__ == '__main__':
     #         print(data.root_path,data.idx)
     #     if data.gt_command < 1 or data.gt_command > 6:
     #         print(data.root_path,data.idx)
-    dataloader = DataLoader(dataset, batch_size=256,shuffle=True, collate_fn=CarlaDataset.vae_measurement2wp_collate_fn)
+    dataloader = DataLoader(dataset, batch_size=256,shuffle=True, collate_fn=CarlaDataset.vae_clip_lidar_measurement2cmdwp_collate_fn)
     for (data, label) in dataloader:
         print(data[0].shape)
         print(data[1].shape)
-        print(label.shape)
+        print(data[2].shape)
+        print(data[3].shape)
+        print(label[0].shape)
+        print(label[1].shape)
         break
     # from tqdm import tqdm
     # for i in tqdm(dataset):

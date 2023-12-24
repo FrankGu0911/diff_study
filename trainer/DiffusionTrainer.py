@@ -78,6 +78,7 @@ class DiffusionTrainer:
         train_loss = []
         cur_loss = []
         scaler = GradScaler()
+        torch.autograd.set_detect_anomaly(True)
         for i,(data,label) in enumerate(train_loop):
             # no_lidar
             # data -> (batch_size, 4, 768)
