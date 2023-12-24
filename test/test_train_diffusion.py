@@ -55,12 +55,13 @@ if __name__ == "__main__":
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=args.epoch,T_mult=2,eta_min=1e-6)
     train_ds = CarlaDataset('/mnt/e/remote/dataset-full',
                             weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
-                            towns=[1,2,3,4,5,6,7,10])
+                            towns=[1,2,3,4,5,6,7,10],
+                            interval_frame=args.interval)
     # train_ds = CarlaDataset('/data/zjw/frank/dataset-remote/dataset-full',weathers=[4],towns=[1])
     val_ds = CarlaDataset('/mnt/e/remote/dataset-val',
                           weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
-                          towns=[1,2,3,4,5,6,7,10])
-    # TODO: add interval frame directly in dataset
+                          towns=[1,2,3,4,5,6,7,10],
+                          interval_frame=args.interval)
     if args.lidar:
         train_loader = DataLoader(train_ds,
                                 batch_size=args.batch_size,
@@ -129,6 +130,5 @@ if __name__ == "__main__":
                                 model_save_path=model_path,
                                 dist=False,
                                 with_lidar=args.lidar,
-                                half=args.half,
-                                interval_frame=args.interval)
+                                half=args.half)
     trainer.train(current_epoch,max_epoch=args.epoch)

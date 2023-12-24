@@ -18,7 +18,7 @@ class CarlaDataset(Dataset):
             pred_len=0,
             seq_len=1,
             use_cache=True,
-            # interval_frame=1,
+            interval_frame=1,
     ):
         super().__init__()
         self.root = root
@@ -32,7 +32,7 @@ class CarlaDataset(Dataset):
         self.vae_model_path = vae_model_path
         self.pred_len = pred_len
         self.seq_len = seq_len
-        # self.interval = interval_frame
+        self.interval = interval_frame
         if use_cache:
             if not os.path.exists(os.path.join(root,'cache.json')):\
                 self.gen_cache()
@@ -53,8 +53,8 @@ class CarlaDataset(Dataset):
                 continue
             # remove the first frame and the last two frame
             for i in range(self.seq_len + 1, frames - self.pred_len - 1):
-                # if i % self.interval != 0:
-                #     continue
+                if i % self.interval != 0:
+                    continue
                 self.route_frames.append((os.path.join(root, path), i))
         _logger.info("Sub route dir nums: %d" % len(self.route_frames))
 
