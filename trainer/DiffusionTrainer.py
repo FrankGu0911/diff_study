@@ -67,7 +67,7 @@ class DiffusionTrainer:
     def train_one_epoch(self,current_epoch:int):
         logging.info(f"[GPU:{self.gpu_id}] Epoch {current_epoch} | Train Steps: {len(self.train_loader)}")
         self.model.train()
-        # torch.manual_seed(2023)
+        torch.manual_seed(2023)
         if self.gpu_id == 0:
             train_loop = tqdm(self.train_loader,
                               desc="Train Epoch {}".format(current_epoch),
@@ -167,7 +167,7 @@ class DiffusionTrainer:
 
     def val_one_epoch(self,current_epoch:int):
         self.model.eval()
-        # torch.manual_seed(2023)
+        torch.manual_seed(2023)
         if self.gpu_id == 0:
             val_loop = tqdm(self.val_loader,desc="Val Epoch {}".format(current_epoch),total=len(self.val_loader))
         else:

@@ -17,6 +17,7 @@ class LCDiffPlannerTrainer:
                 lr_scheduler:torch.optim.lr_scheduler=None,
                 with_rgb:bool=False,
                 with_lidar:bool=False,
+                with_stop_reason:bool=False,
                 autocast:bool=False,
                 writer:SummaryWriter=None,
                 model_save_path:str='pretrained/controlnet',
@@ -48,6 +49,7 @@ class LCDiffPlannerTrainer:
         self.model_save_path = model_save_path
         self.with_rgb = with_rgb
         self.with_lidar = with_lidar
+        self.with_stop_reason = with_stop_reason
         self.criterion = torch.nn.MSELoss()
 
     def train_one_epoch(self,current_epoch:int):
@@ -73,16 +75,21 @@ class LCDiffPlannerTrainer:
                 rgb_feature = data[2]
             if self.with_lidar:
                 lidar_feature = data[3]
+            if self.with_stop_reason:
+                stop_reason = label[1]
+                label = label[0]
             if self.half:
                 topdown_feature = topdown_feature.to(torch.bfloat16).cuda(self.gpu_id)
                 measurement_feature = measurement_feature.to(torch.bfloat16).cuda(self.gpu_id)
                 label = label.to(torch.bfloat16).cuda(self.gpu_id)
+                stop_reason = stop_reason.to(torch.bfloat16).cuda(self.gpu_id) if stop_reason is not None else None
                 rgb_feature = rgb_feature.to(torch.bfloat16).cuda(self.gpu_id) if rgb_feature is not None else None
                 lidar_feature = lidar_feature.to(torch.bfloat16).cuda(self.gpu_id) if lidar_feature is not None else None
             else:
                 topdown_feature = topdown_feature.to(torch.float32).cuda(self.gpu_id)
                 measurement_feature = measurement_feature.to(torch.float32).cuda(self.gpu_id)
                 label = label.to(torch.float32).cuda(self.gpu_id)
+                stop_reason = stop_reason.to(torch.float32).cuda(self.gpu_id) if stop_reason is not None else None
                 rgb_feature = rgb_feature.to(torch.float32).cuda(self.gpu_id) if rgb_feature is not None else None
                 lidar_feature = lidar_feature.to(torch.float32).cuda(self.gpu_id) if lidar_feature is not None else None
             with autocast(enabled=self.autocast):
@@ -98,7 +105,12 @@ class LCDiffPlannerTrainer:
                                     lidar_feature=lidar_feature)
                 else:
                     out = self.gru(topdown_feature,measurement_feature)
-                loss = self.criterion(out,label)
+                if self.with_stop_reason:
+                    out, out_reason = out
+                    loss = self.criterion(out,label) + torch.nn.CrossEntropyLoss(out_reason,stop_reason)
+                else:
+                    loss = self.criterion(out,label)
+                
             if torch.isnan(loss):
                 tqdm.write("Loss is NaN!")
             else:
@@ -133,16 +145,21 @@ class LCDiffPlannerTrainer:
                 rgb_feature = data[2]
             if self.with_lidar:
                 lidar_feature = data[3]
+            if self.with_stop_reason:
+                stop_reason = label[1]
+                label = label[0]
             if self.half:
                 topdown_feature = topdown_feature.to(torch.bfloat16).cuda(self.gpu_id)
                 measurement_feature = measurement_feature.to(torch.bfloat16).cuda(self.gpu_id)
                 label = label.to(torch.bfloat16).cuda(self.gpu_id)
+                stop_reason = stop_reason.to(torch.bfloat16).cuda(self.gpu_id) if stop_reason is not None else None
                 rgb_feature = rgb_feature.to(torch.bfloat16).cuda(self.gpu_id) if rgb_feature is not None else None
                 lidar_feature = lidar_feature.to(torch.bfloat16).cuda(self.gpu_id) if lidar_feature is not None else None
             else:
                 topdown_feature = topdown_feature.to(torch.float32).cuda(self.gpu_id)
                 measurement_feature = measurement_feature.to(torch.float32).cuda(self.gpu_id)
                 label = label.to(torch.float32).cuda(self.gpu_id)
+                stop_reason = stop_reason.to(torch.float32).cuda(self.gpu_id) if stop_reason is not None else None
                 rgb_feature = rgb_feature.to(torch.float32).cuda(self.gpu_id) if rgb_feature is not None else None
                 lidar_feature = lidar_feature.to(torch.float32).cuda(self.gpu_id) if lidar_feature is not None else None
             with torch.no_grad():

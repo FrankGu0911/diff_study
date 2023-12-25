@@ -11,12 +11,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 
 def SetArgs():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--resume",action="store_true",default=False)
-    parser.add_argument("--batch_size",type=int,default=8)
-    parser.add_argument("--epoch",type=int,default=35)
-    parser.add_argument("--pred_len",type=int,default=4)
-    parser.add_argument("--with_rgb",action="store_true",default=False)
-    parser.add_argument("--with_lidar",action="store_true",default=False)
+    parser.add_argument('-r',"--resume",action="store_true",default=False)
+    parser.add_argument('-b',"--batch_size",type=int,default=8)
+    parser.add_argument('-e',"--epoch",type=int,default=35)
+    parser.add_argument('-l',"--pred_len",type=int,default=4)
+    parser.add_argument('-rgb',"--with_rgb",action="store_true",default=False)
+    parser.add_argument("-lidar","--with_lidar",action="store_true",default=False)
+    parser.add_argument('-sr',"--with_stop_reason",action="store_true",default=False)
     parser.add_argument("--autocast",action="store_true",default=False)
     parser.add_argument("--half",action="store_true",default=False)
     return parser.parse_args()
@@ -44,7 +45,7 @@ def latest_model_path(path):
 if __name__ == "__main__":
     args = SetArgs()
     device = torch.device("cuda:0")
-    gru_model = GRU(with_lidar=args.with_lidar,with_rgb=args.with_rgb)
+    gru_model = GRU(with_lidar=args.with_lidar,with_rgb=args.with_rgb,with_stop_reason=args.with_stop_reason)
     if args.half:
         gru_model = gru_model.to(torch.bfloat16)
     gru_model = gru_model.to(device)
@@ -58,14 +59,14 @@ if __name__ == "__main__":
     train_loader = DataLoader(train_ds,
                               batch_size=args.batch_size,
                               shuffle=True,
-                              collate_fn=CarlaDataset.vae_clip_lidar_measurement2wp_collate_fn,
+                              collate_fn=CarlaDataset.vae_clip_lidar_measurement2cmdwp_collate_fn,
                               num_workers=8,
                               pin_memory=True,
                               )
     val_loader = DataLoader(val_ds,
                             batch_size=args.batch_size,
                             shuffle=False,
-                            collate_fn=CarlaDataset.vae_clip_lidar_measurement2wp_collate_fn,
+                            collate_fn=CarlaDataset.vae_clip_lidar_measurement2cmdwp_collate_fn,
                             num_workers=8,
                             pin_memory=True
                             )
@@ -102,6 +103,7 @@ if __name__ == "__main__":
                                     autocast=args.autocast,
                                     with_lidar=args.with_lidar,
                                     with_rgb=args.with_rgb,
+                                    with_stop_reason=args.with_stop_reason,
                                     writer=writer,
                                     model_save_path=model_path,
                                     dist=False,

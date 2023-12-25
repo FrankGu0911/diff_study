@@ -3,27 +3,34 @@ import torch.nn as nn
 
 
 class GRU(nn.Module):
-    def __init__(self,pred_len=4,with_rgb=False,with_lidar=False):
+    def __init__(self,pred_len=4,with_rgb=False,with_lidar=False,with_stop_reason=False,dropout_rate=0.2):
         super().__init__()
         self.pred_len = pred_len
         self.with_rgb = with_rgb
         self.with_lidar = with_lidar
+        self.with_stop_reason = with_stop_reason
+        self.dropout_rate = dropout_rate
         self.measurement = nn.Sequential(
                 nn.Linear(2+6, 64),
                 nn.LeakyReLU(),
                 nn.Linear(64, 64),
+                nn.Dropout(self.dropout_rate),
                 nn.LeakyReLU(),
                 nn.Linear(64, 256),
+                nn.Dropout(self.dropout_rate),
                 nn.LeakyReLU(),
                 )
         self.topdown_input = nn.Sequential(
                 nn.Linear(4*32*32, 2048),
                 nn.LeakyReLU(),
                 nn.Linear(2048, 1024),
+                nn.Dropout(self.dropout_rate),
                 nn.LeakyReLU(),
                 nn.Linear(1024, 1024),
+                nn.Dropout(self.dropout_rate),
                 nn.LeakyReLU(),
                 nn.Linear(1024, 256),
+                nn.Dropout(self.dropout_rate),
                 nn.LeakyReLU(),
                 )
         if self.with_rgb:
@@ -31,8 +38,10 @@ class GRU(nn.Module):
                     nn.Linear(4*768, 1024),
                     nn.LeakyReLU(),
                     nn.Linear(1024, 1024),
+                    nn.Dropout(self.dropout_rate),
                     nn.LeakyReLU(),
                     nn.Linear(1024, 256),
+                    nn.Dropout(self.dropout_rate),
                     nn.LeakyReLU(),
                     )
         if self.with_lidar:
@@ -54,36 +63,46 @@ class GRU(nn.Module):
                     nn.Linear(256*256, 1024),
                     nn.LeakyReLU(),
                     nn.Linear(1024, 1024),
+                    nn.Dropout(self.dropout_rate),
                     nn.LeakyReLU(),
                     nn.Linear(1024, 256),
+                    nn.Dropout(self.dropout_rate),
                     nn.LeakyReLU(),
                     )
         if self.with_rgb and self.with_lidar:
             self.fusion = nn.Sequential(
                     nn.Linear(1024, 512),
+                    nn.Dropout(self.dropout_rate),
                     nn.LeakyReLU(),
                     nn.Linear(512, 512),
+                    nn.Dropout(self.dropout_rate),
                     nn.LeakyReLU(),
                     )
         elif self.with_rgb:
             self.fusion = nn.Sequential(
                     nn.Linear(512+256, 512),
+                    nn.Dropout(self.dropout_rate),
                     nn.LeakyReLU(),
                     nn.Linear(512, 512),
+                    nn.Dropout(self.dropout_rate),
                     nn.LeakyReLU(),
                     )
         elif self.with_lidar:
             self.fusion = nn.Sequential(
                     nn.Linear(512+256, 512),
+                    nn.Dropout(self.dropout_rate),
                     nn.LeakyReLU(),
                     nn.Linear(512, 512),
+                    nn.Dropout(self.dropout_rate),
                     nn.LeakyReLU(),
                     )
         else:
             self.fusion = nn.Sequential(
                     nn.Linear(512, 512),
+                    nn.Dropout(self.dropout_rate),
                     nn.LeakyReLU(),
                     nn.Linear(512, 512),
+                    nn.Dropout(self.dropout_rate),
                     nn.LeakyReLU(),
                     )
         self.decoder = nn.GRUCell(input_size=4, hidden_size = 512)
@@ -94,6 +113,14 @@ class GRU(nn.Module):
                 nn.LeakyReLU(),
                 nn.Linear(64, 2),
                 )
+        if self.with_stop_reason:
+            self.reason_output = nn.Sequential(
+                nn.Linear(512,256),
+                nn.LeakyReLU(),
+                nn.Linear(256, 64),
+                nn.LeakyReLU(),
+                nn.Linear(64, 18),
+            )
     
     def forward(self, topdown_feature, measurement_feature,rgb_feature=None,lidar_feature=None):
         # topdown_feature: (bs,4,32,32)
@@ -120,24 +147,29 @@ class GRU(nn.Module):
             z = self.fusion(torch.cat([topdown_input, measurement_input], dim=1))
         # print(topdown_input.shape)
         # print(measurement_input.shape)
+        if self.with_stop_reason:
+            out_reason = self.reason_output(z)
         x  = torch.zeros(bs,2).to(measurement_feature.dtype).to(measurement_feature.device)
         # print(z.shape)
         target_point = measurement_feature[:,:2]
-        output = []
+        out_wp = []
         for _ in range(self.pred_len):
             x_in = torch.cat((x,target_point),dim=1)
             z = self.decoder(x_in,z)
             dx = self.output(z)
             x = x + dx
-            output.append(x)
-        output = torch.stack(output,dim=1)
-        return output
+            out_wp.append(x)
+        out_wp = torch.stack(out_wp,dim=1)
+        if self.with_stop_reason:
+            return out_wp,out_reason
+        return out_wp
 
 if __name__ == "__main__":
-    model = GRU(with_lidar=True,with_rgb=True)
+    model = GRU(with_lidar=True,with_rgb=True,with_stop_reason=True)
     topdown_feature = torch.randn(4,4,32,32).to(torch.float32)
     measurement_feature = torch.randn(4,2+6).to(torch.float32)
     rgb_feature = torch.randn(4,4,768).to(torch.float32)
     lidar_feature = torch.randn(4,3,256,256).to(torch.float32)
-    output = model(topdown_feature, measurement_feature,rgb_feature=rgb_feature,lidar_feature=lidar_feature)
-    print(output.shape)
+    outwp,outreason = model(topdown_feature, measurement_feature,rgb_feature=rgb_feature,lidar_feature=lidar_feature)
+    print(outwp.shape)
+    print(outreason.shape)
