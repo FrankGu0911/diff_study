@@ -60,14 +60,14 @@ if __name__ == "__main__":
                               batch_size=args.batch_size,
                               shuffle=True,
                               collate_fn=CarlaDataset.vae_clip_lidar_measurement2cmdwp_collate_fn,
-                              num_workers=8,
+                              num_workers=12,
                               pin_memory=True,
                               )
     val_loader = DataLoader(val_ds,
                             batch_size=args.batch_size,
                             shuffle=False,
                             collate_fn=CarlaDataset.vae_clip_lidar_measurement2cmdwp_collate_fn,
-                            num_workers=8,
+                            num_workers=12,
                             pin_memory=True
                             )
     model_name = 'gru'
@@ -75,6 +75,8 @@ if __name__ == "__main__":
         model_name+='_rgb'
     if args.with_lidar:
         model_name+='_lidar'
+    if args.with_stop_reason:
+        model_name+='_reason'
     model_path =os.path.join('pretrained',model_name)
     CheckPath(model_path)
     if args.resume:

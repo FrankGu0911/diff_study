@@ -183,7 +183,7 @@ class CarlaLabel():
             way_x,way_y = self.transform_waypoints(x,y,waypoint[0],waypoint[1],theta)
             command_waypoints.append((way_x,way_y))
         for i in range(self.pred_len-len(self._measurements["future_waypoints"])):
-            command_waypoints.append((10000,10000))
+            command_waypoints.append((0,0))
         return torch.Tensor(command_waypoints)
 
     @property
@@ -191,81 +191,81 @@ class CarlaLabel():
         if self._measurements is None:
             self._measurements = self._LoadJson("measurements_full", self.index)
         if self._measurements["should_brake"] == 1:
-            return torch.Tensor([1,0])
+            return torch.Tensor([1])
         else:
-            return torch.Tensor([0,1])
+            return torch.Tensor([0])
     
     @property
     def should_slow(self):
         if self._measurements is None:
             self._measurements = self._LoadJson("measurements_full", self.index)
         if self._measurements["should_slow"] == 1:
-            return torch.Tensor([1,0])
+            return torch.Tensor([1])
         else:
-            return torch.Tensor([0,1])
+            return torch.Tensor([0])
     
     @property
     def is_junction(self):
         if self._measurements is None:
             self._measurements = self._LoadJson("measurements_full", self.index)
         if self._measurements["is_junction"] == True:
-            return torch.Tensor([1,0])
+            return torch.Tensor([1])
         else:
-            return torch.Tensor([0,1])
+            return torch.Tensor([0])
         
     @property
     def is_vehicle_present(self):
         if self._measurements is None:
             self._measurements = self._LoadJson("measurements_full", self.index)
         if self._measurements["is_vehicle_present"] != []:
-            return torch.Tensor([1,0])
+            return torch.Tensor([1])
         else:
-            return torch.Tensor([0,1])
+            return torch.Tensor([0])
     
     @property
     def is_bike_present(self):
         if self._measurements is None:
             self._measurements = self._LoadJson("measurements_full", self.index)
         if self._measurements["is_bike_present"] != []:
-            return torch.Tensor([1,0])
+            return torch.Tensor([1])
         else:
-            return torch.Tensor([0,1])
+            return torch.Tensor([0])
     
     @property
     def is_lane_vehicle_present(self):
         if self._measurements is None:
             self._measurements = self._LoadJson("measurements_full", self.index)
         if self._measurements["is_lane_vehicle_present"] != []:
-            return torch.Tensor([1,0])
+            return torch.Tensor([1])
         else:
-            return torch.Tensor([0,1])
+            return torch.Tensor([0])
         
     @property
     def is_junction_vehicle_present(self):
         if self._measurements is None:
             self._measurements = self._LoadJson("measurements_full", self.index)
         if self._measurements["is_junction_vehicle_present"] != []:
-            return torch.Tensor([1,0])
+            return torch.Tensor([1])
         else:
-            return torch.Tensor([0,1])
+            return torch.Tensor([0])
         
     @property
     def is_pedestrian_present(self):
         if self._measurements is None:
             self._measurements = self._LoadJson("measurements_full", self.index)
         if self._measurements["is_pedestrian_present"] != []:
-            return torch.Tensor([1,0])
+            return torch.Tensor([1])
         else:
-            return torch.Tensor([0,1])
+            return torch.Tensor([0])
     
     @property
     def is_red_light_present(self):
         if self._measurements is None:
             self._measurements = self._LoadJson("measurements_full", self.index)
         if self._measurements["is_red_light_present"] != []:
-            return torch.Tensor([1,0])
+            return torch.Tensor([1])
         else:
-            return torch.Tensor([0,1])
+            return torch.Tensor([0])
     
     @property
     def stop_reason_onehot(self):

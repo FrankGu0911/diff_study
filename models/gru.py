@@ -119,7 +119,9 @@ class GRU(nn.Module):
                 nn.LeakyReLU(),
                 nn.Linear(256, 64),
                 nn.LeakyReLU(),
-                nn.Linear(64, 18),
+                nn.Linear(64, 32),
+                nn.LeakyReLU(),
+                nn.Linear(32, 9),
             )
     
     def forward(self, topdown_feature, measurement_feature,rgb_feature=None,lidar_feature=None):
