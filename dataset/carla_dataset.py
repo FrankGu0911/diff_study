@@ -242,7 +242,7 @@ if __name__ == '__main__':
     #     print(data[0].shape)
     #     print(data[1].shape)
     #     print(label.shape)
-    dataset = CarlaDataset("/mnt/e/remote/dataset-full",weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],pred_len=4)
+    dataset = CarlaDataset("E:/remote/dataset-full",weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],pred_len=4)
     # from tqdm import tqdm
     # for i in tqdm(range(0,len(dataset))):
     #     dataset[i][0].point_command
@@ -255,14 +255,16 @@ if __name__ == '__main__':
     #     if data.gt_command < 1 or data.gt_command > 6:
     #         print(data.root_path,data.idx)
     dataloader = DataLoader(dataset, batch_size=256,shuffle=True, collate_fn=CarlaDataset.vae_clip_lidar_measurement2cmdwp_collate_fn)
-    for (data, label) in dataloader:
-        print(data[0].shape)
-        print(data[1].shape)
-        print(data[2].shape)
-        print(data[3].shape)
-        print(label[0].shape)
-        print(label[1].shape)
-        break
+    from tqdm import tqdm
+    for (data, label) in tqdm(dataset):
+        try:
+            data.clip_feature
+            label.vae_feature
+            data.measurements_feature
+            data.lidar_2d
+            label.future_waypoints
+        except:
+            print(data.root_path,data.idx)
     # from tqdm import tqdm
     # for i in tqdm(dataset):
     #     i[0].clip_feature

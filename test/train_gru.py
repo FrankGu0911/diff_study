@@ -49,7 +49,7 @@ if __name__ == "__main__":
     if args.half:
         gru_model = gru_model.to(torch.bfloat16)
     gru_model = gru_model.to(device)
-    gru_optimizer = torch.optim.AdamW(gru_model.parameters(),lr=2e-4,
+    gru_optimizer = torch.optim.AdamW(gru_model.parameters(),lr=1e-5,
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
                               eps=1e-8)
@@ -60,14 +60,14 @@ if __name__ == "__main__":
                               batch_size=args.batch_size,
                               shuffle=True,
                               collate_fn=CarlaDataset.vae_clip_lidar_measurement2cmdwp_collate_fn,
-                              num_workers=12,
+                              num_workers=8,
                               pin_memory=True,
                               )
     val_loader = DataLoader(val_ds,
                             batch_size=args.batch_size,
                             shuffle=False,
                             collate_fn=CarlaDataset.vae_clip_lidar_measurement2cmdwp_collate_fn,
-                            num_workers=12,
+                            num_workers=8,
                             pin_memory=True
                             )
     model_name = 'gru'

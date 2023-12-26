@@ -113,7 +113,7 @@ class LCDiffPlannerTrainer:
                     out_wp, out_reason = out
                     loss_wp = self.criterion(out_wp,wp)
                     loss_sr = torch.nn.BCEWithLogitsLoss()(out_reason,stop_reason)
-                    loss = loss_wp+ 10 * loss_sr
+                    loss = loss_wp+ 3 * loss_sr
                 else:
                     loss = self.criterion(out,wp)
             if torch.isnan(loss):
@@ -199,7 +199,7 @@ class LCDiffPlannerTrainer:
                     out, out_reason = out
                     loss_wp = self.criterion(out,wp)
                     loss_sr = torch.nn.BCEWithLogitsLoss()(out_reason,stop_reason)
-                    loss = loss_wp+loss_sr
+                    loss = loss_wp+10*loss_sr
                 else:
                     loss = self.criterion(out,wp)
             if torch.isnan(loss):
