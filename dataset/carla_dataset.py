@@ -160,6 +160,23 @@ class CarlaDataset(Dataset):
         return (data, label)
     
     @staticmethod
+    def clip_lidar2d_path_idx_collate_fn(batch):
+        try:
+            data = []
+            data.append(torch.cat([data.clip_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            data.append(torch.cat([data.lidar_2d.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            label = [ (data.root_path,data.idx) for (data, label) in batch]
+        except Exception as e:
+            for (data, label) in batch:
+                print("data_path: %s:%d" %(data.root_path,data.idx))
+                print('lidar2d_feature:',data.lidar_2d.shape)
+                # print('vae_feature:',label.vae_feature.shape)
+            raise e
+        return (data, label)
+    
+    @staticmethod
     def vae_measurement2wp_collate_fn(batch):
         try:
             data = []
@@ -227,6 +244,33 @@ class CarlaDataset(Dataset):
                 print('stop_reason:',label.stop_reason_onehot.shape)
             raise e
         return (data, label)
+    
+    @staticmethod
+    def control_clip_lidar_measurement2cmdwp_collate_fn(batch):
+        try:
+            data = []
+            data.append(torch.cat([data.controlnet_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            data.append(torch.cat([data.measurements_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            data.append(torch.cat([data.clip_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            data.append(torch.cat([data.lidar_2d.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            label = []
+            label.append(torch.cat([label.command_waypoints.unsqueeze(0)
+                              for (data, label) in batch], dim=0))
+            label.append(torch.cat([label.stop_reason_onehot.unsqueeze(0)
+                              for (data, label) in batch], dim=0))
+        except Exception as e:
+            for (data, label) in batch:
+                print("data_path: %s:%d" %(data.root_path,data.idx))
+                print('controlnet_feature:',data.controlnet_feature.shape)
+                print('measurement:',torch.cat([data.point_command,data.gt_command_onehot]).shape)
+                print('waypoint:',label.command_waypoints.shape)
+                print('stop_reason:',label.stop_reason_onehot.shape)
+            raise e
+        return (data, label)        
 
 if __name__ == '__main__':
     # logging.basicConfig(level=logging.DEBUG)
@@ -254,17 +298,11 @@ if __name__ == '__main__':
     #         print(data.root_path,data.idx)
     #     if data.gt_command < 1 or data.gt_command > 6:
     #         print(data.root_path,data.idx)
-    dataloader = DataLoader(dataset, batch_size=256,shuffle=True, collate_fn=CarlaDataset.vae_clip_lidar_measurement2cmdwp_collate_fn)
+    dataloader = DataLoader(dataset, batch_size=8,shuffle=False, collate_fn=CarlaDataset.clip_lidar2d_path_idx_collate_fn)
     from tqdm import tqdm
-    for (data, label) in tqdm(dataset):
-        try:
-            data.clip_feature
-            label.vae_feature
-            data.measurements_feature
-            data.lidar_2d
-            label.future_waypoints
-        except:
-            print(data.root_path,data.idx)
+    for (data, label) in tqdm(dataloader,total=len(dataloader)):
+        print(label)
+        break
     # from tqdm import tqdm
     # for i in tqdm(dataset):
     #     i[0].clip_feature

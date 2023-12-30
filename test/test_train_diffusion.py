@@ -52,7 +52,7 @@ if __name__ == "__main__":
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
                               eps=1e-8)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=args.epoch,T_mult=2,eta_min=1e-6)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(unet_optimizer,T_0=args.epoch,T_mult=2,eta_min=5e-6)
     train_ds = CarlaDataset('/mnt/e/remote/dataset-full',
                             weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],
                             towns=[1,2,3,4,5,6,7,10],

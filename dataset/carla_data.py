@@ -50,6 +50,8 @@ class CarlaData():
         self._is_rgb_merged = is_rgb_merged
         self._rgb_merged = None
         self._clip_feature = None
+        self._diffusion_feature = None
+        self._controlnet_feature = None
         # self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     def __repr__(self) -> str:
@@ -271,6 +273,24 @@ class CarlaData():
                         self._clip_feature = clip_encoder.encode_image(preprocess(self.image_full.to('cuda' if torch.cuda.is_available() else 'cpu')))
                     torch.save(self._clip_feature, os.path.join(self.root_path, "clip_feature", "%04d.pt" % self.idx))
         return self._clip_feature
+
+    @property
+    def diffusion_feature(self):
+        if self._diffusion_feature is None:
+            if os.path.exists(os.path.join(self.root_path, "diffusion_feature", "%04d.pt" % self.idx)):
+                self._diffusion_feature = torch.load(os.path.join(self.root_path, "diffusion_feature", "%04d.pt" % self.idx),map_location='cpu').to(torch.float32)
+            else:
+                raise FileNotFoundError(f"File {os.path.join(self.root_path, 'diffusion_feature', '%04d.pt' % self.idx)} does not exist")
+        return self._diffusion_feature
+    
+    @property
+    def controlnet_feature(self):
+        if self._controlnet_feature is None:
+            if os.path.exists(os.path.join(self.root_path, "controlnet_feature", "%04d.pt" % self.idx)):
+                self._controlnet_feature = torch.load(os.path.join(self.root_path, "controlnet_feature", "%04d.pt" % self.idx),map_location='cpu').to(torch.float32)
+            else:
+                raise FileNotFoundError(f"File {os.path.join(self.root_path, 'controlnet_feature', '%04d.pt' % self.idx)} does not exist")
+        return self._controlnet_feature
 
     def GetGPSPoint(self,idx:int):
         if self.cache is not None:

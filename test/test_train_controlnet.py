@@ -18,6 +18,7 @@ def SetArgs():
     parser.add_argument("--epoch",type=int,default=35)
     parser.add_argument("--autocast",action="store_true",default=False)
     parser.add_argument("--half",action="store_true",default=False)
+    parser.add_argument("--interval",type=int,default=1)
     return parser.parse_args()
 
 def CheckPath(path:str):
@@ -43,7 +44,7 @@ def latest_model_path(path):
 if __name__ == "__main__":
     args = SetArgs()
     device = torch.device("cuda:0")
-    unet_model_path = "pretrained/diffusion/diffusion_model_36.pth"
+    unet_model_path = "pretrained/diffusion/diffusion_model_38.pth"
     unet_model = UNet()
     controlnet_model = ControlNet()
     if args.half:
@@ -52,27 +53,27 @@ if __name__ == "__main__":
         controlnet_model = controlnet_model.to(torch.bfloat16)
     unet_model = unet_model.to(device)
     controlnet_model = controlnet_model.to(device)
-    controlnet_optimizer = torch.optim.AdamW(controlnet_model.parameters(),lr=1e-4,
+    controlnet_optimizer = torch.optim.AdamW(controlnet_model.parameters(),lr=4e-5,
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
                               eps=1e-8)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(controlnet_optimizer,T_0=args.epoch,T_mult=2,eta_min=1e-6)
-    train_ds = CarlaDataset('E:\\remote\\dataset-full',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],interval_frame=7)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(controlnet_optimizer,T_0=args.epoch,T_mult=2,eta_min=4e-6)
+    train_ds = CarlaDataset('/mnt/e/remote/dataset-full',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],interval_frame=args.interval)
     # train_ds = CarlaDataset('/data/zjw/frank/dataset-remote/dataset-full',weathers=[4],towns=[1])
-    val_ds = CarlaDataset('E:\\remote\\dataset-val',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],interval_frame=3)
+    val_ds = CarlaDataset('/mnt/e/remote/dataset-val',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],interval_frame=args.interval)
     train_loader = DataLoader(train_ds,
                             batch_size=args.batch_size,
                             shuffle=True,
                             collate_fn=CarlaDataset.clip_lidar2d_feature2vae_feature_collate_fn,
                             pin_memory=True,
-                            num_workers=8,
+                            num_workers=16,
                             )
     val_loader = DataLoader(val_ds,
                             batch_size=args.batch_size,
                             shuffle=True,
                             collate_fn=CarlaDataset.clip_lidar2d_feature2vae_feature_collate_fn,
                             pin_memory=True,
-                            num_workers=8,
+                            num_workers=16,
                             )
     unet_model.load_state_dict(torch.load(unet_model_path,map_location=device)["model_state_dict"])
     model_path = os.path.join("pretrained",'controlnet')
