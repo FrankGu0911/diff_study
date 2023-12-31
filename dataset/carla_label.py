@@ -183,7 +183,7 @@ class CarlaLabel():
             way_x,way_y = self.transform_waypoints(x,y,waypoint[0],waypoint[1],theta)
             command_waypoints.append((way_x,way_y))
         for i in range(self.pred_len-len(self._measurements["future_waypoints"])):
-            command_waypoints.append((0,0))
+            command_waypoints.append(command_waypoints[-1])
         return torch.Tensor(command_waypoints)
 
     @property

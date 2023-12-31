@@ -11,7 +11,7 @@ class GRU(nn.Module):
         self.with_stop_reason = with_stop_reason
         self.dropout_rate = dropout_rate
         self.measurement = nn.Sequential(
-                nn.Linear(2+6, 64),
+                nn.Linear(1+2+6, 64),
                 nn.LeakyReLU(),
                 nn.Linear(64, 64),
                 nn.Dropout(self.dropout_rate),
@@ -126,7 +126,7 @@ class GRU(nn.Module):
     
     def forward(self, topdown_feature, measurement_feature,rgb_feature=None,lidar_feature=None):
         # topdown_feature: (bs,4,32,32)
-        # measurement_feature: (bs,2+6)
+        # measurement_feature: (bs,1+2+6)
         # rgb_feature: (bs,4,768)
         # lidar_feature: (bs,3,256,256)
         #flatten
@@ -169,7 +169,7 @@ class GRU(nn.Module):
 if __name__ == "__main__":
     model = GRU(with_lidar=True,with_rgb=True,with_stop_reason=True)
     topdown_feature = torch.randn(4,4,32,32).to(torch.float32)
-    measurement_feature = torch.randn(4,2+6).to(torch.float32)
+    measurement_feature = torch.randn(4,1+2+6).to(torch.float32)
     rgb_feature = torch.randn(4,4,768).to(torch.float32)
     lidar_feature = torch.randn(4,3,256,256).to(torch.float32)
     outwp,outreason = model(topdown_feature, measurement_feature,rgb_feature=rgb_feature,lidar_feature=lidar_feature)

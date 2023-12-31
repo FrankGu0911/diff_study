@@ -286,7 +286,7 @@ if __name__ == '__main__':
     #     print(data[0].shape)
     #     print(data[1].shape)
     #     print(label.shape)
-    dataset = CarlaDataset("E:/remote/dataset-full",weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],pred_len=4)
+    dataset = CarlaDataset("E:/remote/dataset-val",weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],pred_len=4)
     # from tqdm import tqdm
     # for i in tqdm(range(0,len(dataset))):
     #     dataset[i][0].point_command
@@ -298,11 +298,81 @@ if __name__ == '__main__':
     #         print(data.root_path,data.idx)
     #     if data.gt_command < 1 or data.gt_command > 6:
     #         print(data.root_path,data.idx)
-    dataloader = DataLoader(dataset, batch_size=8,shuffle=False, collate_fn=CarlaDataset.clip_lidar2d_path_idx_collate_fn)
+    dataloader = DataLoader(dataset, batch_size=8,shuffle=False, 
+                            collate_fn=CarlaDataset.clip_lidar2d_path_idx_collate_fn)
     from tqdm import tqdm
+    import sys
+    sys.path.append('..')
+    sys.path.append('.')
+    sys.path.append('./models')
+    sys.path.append('./dataset')
+    from models.unet import UNet
+    from models.controlnet import ControlNet
+    from diffusers import PNDMScheduler
+    scheduler = PNDMScheduler(
+                        num_train_timesteps=1000, 
+                        beta_end=0.012, 
+                        beta_start=0.00085,
+                        beta_schedule="scaled_linear",
+                        prediction_type="epsilon",
+                        set_alpha_to_one=False,
+                        skip_prk_steps=True,
+                        steps_offset=1,
+                        trained_betas=None
+                        )
+    unet = UNet().cuda()
+    unet_params = torch.load("pretrained/diffusion/diffusion_model_40.pth",map_location='cuda:0')['model_state_dict']
+    unet.load_state_dict(unet_params)
+    unet.to(torch.float32)
+    unet.eval()
+    controlnet = ControlNet().cuda()
+    controlnet_params = torch.load("pretrained/controlnet/controlnet_9.pth",map_location='cuda:0')['model_state_dict']
+    controlnet.load_state_dict(controlnet_params)
+    controlnet.to(torch.float32)
+    controlnet.eval()
+    torch.manual_seed(2023)
     for (data, label) in tqdm(dataloader,total=len(dataloader)):
-        print(label)
-        break
+        flag = True
+        for l in label:
+            feature_path = os.path.join(l[0],"controlnet_feature", "%04d.pt" % l[1])
+            if not os.path.exists(feature_path):
+                flag = False
+                break
+        if flag:
+            continue
+        with torch.no_grad():
+            bs = data[0].shape[0]
+            pos_clip_feature = data[0].cuda()
+            neg_clip_feature = torch.load('pretrained\\neg_clip.pt',map_location='cuda:0')
+            neg_clip_feature = neg_clip_feature.repeat(bs,1,1)
+            clip_feature = torch.cat([neg_clip_feature,pos_clip_feature],dim=0)
+            clip_feature = clip_feature.to(torch.float32)
+            clip_feature = clip_feature.cuda()
+            # pos: clip_feature[8:]    neg: clip_feature[:8]
+            out_vae = torch.randn(bs,4,32,32).cuda()
+            scheduler.set_timesteps(20,device='cuda:0')
+            for cur_time in scheduler.timesteps:
+                cur_time_in = cur_time.unsqueeze(0).repeat(bs*2).cuda()
+                noise = torch.cat((out_vae,out_vae),dim=0)
+                noise = scheduler.scale_model_input(noise, cur_time)
+                lidar_in = torch.cat([data[1],data[1]],dim=0).cuda()
+                out_control_down, out_control_mid = controlnet(noise,clip_feature,time=cur_time_in,condition=lidar_in)
+                pred_noise = unet(out_vae=noise,
+                                out_encoder=clip_feature,time=cur_time_in,
+                                down_block_additional_residuals=out_control_down,
+                                mid_block_additional_residual=out_control_mid)
+                # TODO: the coefficient needs to be comfirmed
+                pred_noise = pred_noise[:bs] + 2 * (pred_noise[bs:] - pred_noise[:bs])
+                out_vae = scheduler.step(pred_noise,cur_time,out_vae).prev_sample
+            # out_vae = out_vae.clone()
+            for i,l in enumerate(label):
+                feature_path = os.path.join(l[0],"controlnet_feature")
+                if not os.path.exists(feature_path):
+                    os.makedirs(feature_path)
+                feature_path = os.path.join(l[0],"controlnet_feature", "%04d.pt" % l[1])
+                cur = out_vae[i].clone()
+                torch.save(cur,feature_path)
+        
     # from tqdm import tqdm
     # for i in tqdm(dataset):
     #     i[0].clip_feature

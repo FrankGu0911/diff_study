@@ -422,7 +422,7 @@ class CarlaData():
             key = self.relative_path
             if key in self.cache.keys():
                 return torch.tensor(self.cache[key]['me'][self.idx]).to(torch.float32)
-        return torch.cat([self.point_command,self.gt_command_onehot])
+        return torch.cat([torch.tensor([self.speed]),self.point_command,self.gt_command_onehot])
     
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
