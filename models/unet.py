@@ -491,8 +491,7 @@ class UNet(torch.nn.Module):
 
         #[1] -> [1, 320]
         time = get_time_embed(time)
-        if out_vae.dtype == torch.bfloat16:
-            time = time.to(torch.bfloat16)
+        time = time.to(out_vae.dtype)
         #[1, 320] -> [1, 1280]
         time = self.in_time(time)
         #----down----

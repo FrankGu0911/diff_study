@@ -410,8 +410,7 @@ class ControlNet(torch.nn.Module):
         out_encoder = self.in_encoder(out_encoder).reshape(-1, 77, 768)
         # in time [1] -> [1, 1280]
         time = self.get_time_embed(time)
-        if out_vae.dtype == torch.bfloat16:
-            time = time.to(torch.bfloat16)
+        time = time.to(out_vae.dtype)
         time = self.in_time(time)
         # condition [1, 3, 256, 256] -> [1, 320, 32, 32]
         # group norm

@@ -300,6 +300,7 @@ if __name__ == '__main__':
     #         print(data.root_path,data.idx)
     dataloader = DataLoader(dataset, batch_size=8,shuffle=False, 
                             collate_fn=CarlaDataset.clip_lidar2d_path_idx_collate_fn)
+    data_type = torch.float16
     from tqdm import tqdm
     import sys
     sys.path.append('..')
@@ -323,14 +324,15 @@ if __name__ == '__main__':
     unet = UNet().cuda()
     unet_params = torch.load("pretrained/diffusion/diffusion_model_40.pth",map_location='cuda:0')['model_state_dict']
     unet.load_state_dict(unet_params)
-    unet.to(torch.float32)
+    unet.to(data_type)
     unet.eval()
     controlnet = ControlNet().cuda()
     controlnet_params = torch.load("pretrained/controlnet/controlnet_9.pth",map_location='cuda:0')['model_state_dict']
     controlnet.load_state_dict(controlnet_params)
-    controlnet.to(torch.float32)
+    controlnet.to(data_type)
     controlnet.eval()
     torch.manual_seed(2023)
+    neg = torch.load('pretrained\\neg_clip.pt',map_location='cuda:0')
     for (data, label) in tqdm(dataloader,total=len(dataloader)):
         flag = True
         for l in label:
@@ -343,19 +345,17 @@ if __name__ == '__main__':
         with torch.no_grad():
             bs = data[0].shape[0]
             pos_clip_feature = data[0].cuda()
-            neg_clip_feature = torch.load('pretrained\\neg_clip.pt',map_location='cuda:0')
-            neg_clip_feature = neg_clip_feature.repeat(bs,1,1)
+            neg_clip_feature = neg.repeat(bs,1,1)
             clip_feature = torch.cat([neg_clip_feature,pos_clip_feature],dim=0)
-            clip_feature = clip_feature.to(torch.float32)
-            clip_feature = clip_feature.cuda()
+            clip_feature = clip_feature.to(data_type).cuda()
             # pos: clip_feature[8:]    neg: clip_feature[:8]
-            out_vae = torch.randn(bs,4,32,32).cuda()
-            scheduler.set_timesteps(20,device='cuda:0')
+            out_vae = torch.randn(bs,4,32,32).to(data_type).cuda()
+            lidar_in = torch.cat([data[1],data[1]],dim=0).to(data_type).cuda()
+            scheduler.set_timesteps(15,device='cuda:0')
             for cur_time in scheduler.timesteps:
-                cur_time_in = cur_time.unsqueeze(0).repeat(bs*2).cuda()
+                cur_time_in = cur_time.unsqueeze(0).repeat(bs*2).to(data_type).cuda()
                 noise = torch.cat((out_vae,out_vae),dim=0)
                 noise = scheduler.scale_model_input(noise, cur_time)
-                lidar_in = torch.cat([data[1],data[1]],dim=0).cuda()
                 out_control_down, out_control_mid = controlnet(noise,clip_feature,time=cur_time_in,condition=lidar_in)
                 pred_noise = unet(out_vae=noise,
                                 out_encoder=clip_feature,time=cur_time_in,
@@ -365,12 +365,19 @@ if __name__ == '__main__':
                 pred_noise = pred_noise[:bs] + 2 * (pred_noise[bs:] - pred_noise[:bs])
                 out_vae = scheduler.step(pred_noise,cur_time,out_vae).prev_sample
             # out_vae = out_vae.clone()
+            # judge inf or nan in out_vae
             for i,l in enumerate(label):
                 feature_path = os.path.join(l[0],"controlnet_feature")
                 if not os.path.exists(feature_path):
                     os.makedirs(feature_path)
                 feature_path = os.path.join(l[0],"controlnet_feature", "%04d.pt" % l[1])
-                cur = out_vae[i].clone()
+                if torch.isnan(out_vae[i]).any():
+                    print(l)
+                    print('NAN occur! Exit!')
+                if torch.isinf(out_vae[i]).any():
+                    print(l)
+                    print('INF occur! Exit!')
+                cur = out_vae[i].to(torch.float32).clone()
                 torch.save(cur,feature_path)
         
     # from tqdm import tqdm
