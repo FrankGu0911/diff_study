@@ -69,7 +69,7 @@ class LCDiffPlannerTrainer:
         scaler = GradScaler()
         for i,(data,label) in enumerate(train_loop):
             # topdown_feature: (bs,4,32,32)
-            # measurement_feature: (bs,2+6)
+            # measurement_feature: (bs,1+2+6)
             # label: (bs,4,4,2)
             topdown_feature, measurement_feature = data[0],data[1]
             wp = label[0]
@@ -113,7 +113,7 @@ class LCDiffPlannerTrainer:
                     out_wp, out_reason = out
                     loss_wp = self.criterion(out_wp,wp)
                     loss_sr = torch.nn.BCEWithLogitsLoss()(out_reason,stop_reason)
-                    loss = loss_wp+ 3 * loss_sr
+                    loss = loss_wp + loss_sr
                 else:
                     loss = self.criterion(out,wp)
             if torch.isnan(loss):
@@ -199,7 +199,7 @@ class LCDiffPlannerTrainer:
                     out, out_reason = out
                     loss_wp = self.criterion(out,wp)
                     loss_sr = torch.nn.BCEWithLogitsLoss()(out_reason,stop_reason)
-                    loss = loss_wp+10*loss_sr
+                    loss = loss_wp + loss_sr
                 else:
                     loss = self.criterion(out,wp)
             if torch.isnan(loss):

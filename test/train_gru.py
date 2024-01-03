@@ -49,24 +49,24 @@ if __name__ == "__main__":
     if args.half:
         gru_model = gru_model.to(torch.bfloat16)
     gru_model = gru_model.to(device)
-    gru_optimizer = torch.optim.AdamW(gru_model.parameters(),lr=1e-5,
+    gru_optimizer = torch.optim.AdamW(gru_model.parameters(),lr=4e-5,
                               betas=(0.9, 0.999),
                               weight_decay=0.01,
                               eps=1e-8)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(gru_optimizer,T_0=25,T_mult=2,eta_min=1e-6)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(gru_optimizer,T_0=args.epoch,T_mult=2,eta_min=1e-6)
     train_ds = CarlaDataset('E:\\remote\\dataset-full',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],seq_len=1,pred_len=args.pred_len)
     val_ds = CarlaDataset('E:\\remote\\dataset-val',weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,4,5,6,7,10],seq_len=1,pred_len=args.pred_len)
     train_loader = DataLoader(train_ds,
                               batch_size=args.batch_size,
                               shuffle=True,
-                              collate_fn=CarlaDataset.vae_clip_lidar_measurement2cmdwp_collate_fn,
+                              collate_fn=CarlaDataset.control_clip_lidar_measurement2cmdwpsr_collate_fn,
                               num_workers=8,
                               pin_memory=True,
                               )
     val_loader = DataLoader(val_ds,
                             batch_size=args.batch_size,
                             shuffle=False,
-                            collate_fn=CarlaDataset.vae_clip_lidar_measurement2cmdwp_collate_fn,
+                            collate_fn=CarlaDataset.control_clip_lidar_measurement2cmdwpsr_collate_fn,
                             num_workers=8,
                             pin_memory=True
                             )
