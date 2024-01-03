@@ -89,17 +89,27 @@ class CarlaDataset(Dataset):
                 continue
             points = []
             measurement = []
+            stop_reasons = []
             for i in range(frames):
                 route_dir = os.path.join(self.root,path)
                 data = CarlaData(route_dir, i, 
                                  gen_feature=self.gen_feature,
                                  seq_len=self.seq_len,
                                  cache = self.cache)
+                label = CarlaLabel(route_dir, i,
+                                   base_weight=self.topdown_base_weight,
+                                   diff_weight=self.topdown_diff_weight, 
+                                   gen_feature=self.gen_feature, 
+                                   vae_model_path=self.vae_model_path,
+                                   pred_len=self.pred_len,
+                                   cache=self.cache)
                 points.append(data.ego_position)
                 measurement.append(data.measurements_feature.numpy().tolist())
+                stop_reasons.append(label.stop_reason_onehot.numpy().tolist())
             self.cache[path] = {}
             self.cache[path]['po'] = points
             self.cache[path]['me'] = measurement
+            self.cache[path]['sr'] = stop_reasons
         json.dump(self.cache,open(os.path.join(self.root,'cache.json'),'w'))
 
     @staticmethod
@@ -272,6 +282,33 @@ class CarlaDataset(Dataset):
             raise e
         return (data, label)        
 
+    @staticmethod
+    def control_clip_lidar_measurement2cmdwpsr_collate_fn(batch):
+        try:
+            data = []
+            data.append(torch.cat([data.controlnet_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            data.append(torch.cat([data.measurements_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            data.append(torch.cat([data.clip_feature.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            data.append(torch.cat([data.lidar_2d.unsqueeze(0)
+                         for (data, label) in batch], dim=0))
+            label = []
+            label.append(torch.cat([label.command_waypoints.unsqueeze(0)
+                              for (data, label) in batch], dim=0))
+            label.append(torch.cat([label.future_stop_reason.unsqueeze(0)
+                              for (data, label) in batch], dim=0))
+        except Exception as e:
+            for (data, label) in batch:
+                print("data_path: %s:%d" %(data.root_path,data.idx))
+                print('controlnet_feature:',data.controlnet_feature.shape)
+                print('measurement:',torch.cat([data.point_command,data.gt_command_onehot]).shape)
+                print('waypoint:',label.command_waypoints.shape)
+                print('stop_reason:',label.future_stop_reason.shape)
+            raise e
+        return (data, label)        
+    
 if __name__ == '__main__':
     # logging.basicConfig(level=logging.DEBUG)
     # dataset = CarlaDataset("E:\\dataset")
@@ -286,7 +323,7 @@ if __name__ == '__main__':
     #     print(data[0].shape)
     #     print(data[1].shape)
     #     print(label.shape)
-    dataset = CarlaDataset("/root/autodl-tmp/remote/dataset-full",weathers=[4],towns=[1,2,3,4,5,6,7,10],pred_len=4)
+    dataset = CarlaDataset("E:/remote/dataset-val",weathers=[0,1,2,3,4,5,6,7,8,9,10,11,12,13],towns=[1,2,3,4,5,6,7,10],pred_len=4)
     # from tqdm import tqdm
     # for i in tqdm(range(0,len(dataset))):
     #     dataset[i][0].point_command
@@ -298,89 +335,88 @@ if __name__ == '__main__':
     #         print(data.root_path,data.idx)
     #     if data.gt_command < 1 or data.gt_command > 6:
     #         print(data.root_path,data.idx)
-    dataloader = DataLoader(dataset, batch_size=32,shuffle=False, 
-                            collate_fn=CarlaDataset.clip_lidar2d_path_idx_collate_fn,
-                            num_workers=4)
-    data_type = torch.float16
-    device = torch.device('cuda:1')
-    from tqdm import tqdm
-    import sys
-    sys.path.append('..')
-    sys.path.append('.')
-    sys.path.append('./models')
-    sys.path.append('./dataset')
-    from models.unet import UNet
-    from models.controlnet import ControlNet
-    from diffusers import PNDMScheduler
-    scheduler = PNDMScheduler(
-                        num_train_timesteps=1000, 
-                        beta_end=0.012, 
-                        beta_start=0.00085,
-                        beta_schedule="scaled_linear",
-                        prediction_type="epsilon",
-                        set_alpha_to_one=False,
-                        skip_prk_steps=True,
-                        steps_offset=1,
-                        trained_betas=None
-                        )
-    unet = UNet().to(device)
-    unet_params = torch.load("pretrained/diffusion/diffusion_model_40.pth",map_location=device)['model_state_dict']
-    unet.load_state_dict(unet_params)
-    unet.to(data_type)
-    unet.eval()
-    controlnet = ControlNet().to(device)
-    controlnet_params = torch.load("pretrained/controlnet/controlnet_9.pth",map_location=device)['model_state_dict']
-    controlnet.load_state_dict(controlnet_params)
-    controlnet.to(data_type)
-    controlnet.eval()
-    torch.manual_seed(2023)
-    neg = torch.load('pretrained/neg_clip.pt',map_location=device)
-    for (data, label) in tqdm(dataloader,total=len(dataloader)):
-        flag = True
-        for l in label:
-            feature_path = os.path.join(l[0],"controlnet_feature", "%04d.pt" % l[1])
-            if not os.path.exists(feature_path):
-                flag = False
-                break
-        if flag:
-            continue
-        with torch.no_grad():
-            bs = data[0].shape[0]
-            pos_clip_feature = data[0].to(device)
-            neg_clip_feature = neg.repeat(bs,1,1)
-            clip_feature = torch.cat([neg_clip_feature,pos_clip_feature],dim=0)
-            clip_feature = clip_feature.to(data_type).to(device)
-            # pos: clip_feature[8:]    neg: clip_feature[:8]
-            out_vae = torch.randn(bs,4,32,32).to(data_type).to(device)
-            lidar_in = torch.cat([data[1],data[1]],dim=0).to(data_type).to(device)
-            scheduler.set_timesteps(15,device=device)
-            for cur_time in scheduler.timesteps:
-                cur_time_in = cur_time.unsqueeze(0).repeat(bs*2).to(data_type).to(device)
-                noise = torch.cat((out_vae,out_vae),dim=0)
-                noise = scheduler.scale_model_input(noise, cur_time)
-                out_control_down, out_control_mid = controlnet(noise,clip_feature,time=cur_time_in,condition=lidar_in)
-                pred_noise = unet(out_vae=noise,
-                                out_encoder=clip_feature,time=cur_time_in,
-                                down_block_additional_residuals=out_control_down,
-                                mid_block_additional_residual=out_control_mid)
-                # TODO: the coefficient needs to be comfirmed
-                pred_noise = pred_noise[:bs] + 2 * (pred_noise[bs:] - pred_noise[:bs])
-                out_vae = scheduler.step(pred_noise,cur_time,out_vae).prev_sample
-            # out_vae = out_vae.clone()
-            # judge inf or nan in out_vae
-            for i,l in enumerate(label):
-                feature_path = os.path.join(l[0],"controlnet_feature")
-                if not os.path.exists(feature_path):
-                    os.makedirs(feature_path)
-                feature_path = os.path.join(l[0],"controlnet_feature", "%04d.pt" % l[1])
-                if torch.isnan(out_vae[i]).any():
-                    print(l)
-                    print('NAN occur! Exit!')
-                if torch.isinf(out_vae[i]).any():
-                    print(l)
-                    print('INF occur! Exit!')
-                cur = out_vae[i].to(torch.float32).clone()
-                torch.save(cur,feature_path)
+    # dataloader = DataLoader(dataset, batch_size=16,shuffle=False, 
+    #                         collate_fn=CarlaDataset.clip_lidar2d_path_idx_collate_fn)
+    # data_type = torch.float16
+    # device = torch.device('cuda:0')
+    # from tqdm import tqdm
+    # import sys
+    # sys.path.append('..')
+    # sys.path.append('.')
+    # sys.path.append('./models')
+    # sys.path.append('./dataset')
+    # from models.unet import UNet
+    # from models.controlnet import ControlNet
+    # from diffusers import PNDMScheduler
+    # scheduler = PNDMScheduler(
+    #                     num_train_timesteps=1000, 
+    #                     beta_end=0.012, 
+    #                     beta_start=0.00085,
+    #                     beta_schedule="scaled_linear",
+    #                     prediction_type="epsilon",
+    #                     set_alpha_to_one=False,
+    #                     skip_prk_steps=True,
+    #                     steps_offset=1,
+    #                     trained_betas=None
+    #                     )
+    # unet = UNet().to(device)
+    # unet_params = torch.load("pretrained/diffusion/diffusion_model_40.pth",map_location=device)['model_state_dict']
+    # unet.load_state_dict(unet_params)
+    # unet.to(data_type)
+    # unet.eval()
+    # controlnet = ControlNet().to(device)
+    # controlnet_params = torch.load("pretrained/controlnet/controlnet_9.pth",map_location=device)['model_state_dict']
+    # controlnet.load_state_dict(controlnet_params)
+    # controlnet.to(data_type)
+    # controlnet.eval()
+    # torch.manual_seed(2023)
+    # neg = torch.load('pretrained/neg_clip.pt',map_location=device)
+    # for (data, label) in tqdm(dataloader,total=len(dataloader)):
+    #     flag = True
+    #     for l in label:
+    #         feature_path = os.path.join(l[0],"controlnet_feature", "%04d.pt" % l[1])
+    #         if not os.path.exists(feature_path):
+    #             flag = False
+    #             break
+    #     if flag:
+    #         continue
+    #     with torch.no_grad():
+    #         bs = data[0].shape[0]
+    #         pos_clip_feature = data[0].to(device)
+    #         neg_clip_feature = neg.repeat(bs,1,1)
+    #         clip_feature = torch.cat([neg_clip_feature,pos_clip_feature],dim=0)
+    #         clip_feature = clip_feature.to(data_type).to(device)
+    #         # pos: clip_feature[8:]    neg: clip_feature[:8]
+    #         out_vae = torch.randn(bs,4,32,32).to(data_type).to(device)
+    #         lidar_in = torch.cat([data[1],data[1]],dim=0).to(data_type).to(device)
+    #         scheduler.set_timesteps(15,device=device)
+    #         for cur_time in scheduler.timesteps:
+    #             cur_time_in = cur_time.unsqueeze(0).repeat(bs*2).to(data_type).to(device)
+    #             noise = torch.cat((out_vae,out_vae),dim=0)
+    #             noise = scheduler.scale_model_input(noise, cur_time)
+    #             out_control_down, out_control_mid = controlnet(noise,clip_feature,time=cur_time_in,condition=lidar_in)
+    #             pred_noise = unet(out_vae=noise,
+    #                             out_encoder=clip_feature,time=cur_time_in,
+    #                             down_block_additional_residuals=out_control_down,
+    #                             mid_block_additional_residual=out_control_mid)
+    #             # TODO: the coefficient needs to be comfirmed
+    #             pred_noise = pred_noise[:bs] + 2 * (pred_noise[bs:] - pred_noise[:bs])
+    #             out_vae = scheduler.step(pred_noise,cur_time,out_vae).prev_sample
+    #         # out_vae = out_vae.clone()
+    #         # judge inf or nan in out_vae
+    #         for i,l in enumerate(label):
+    #             feature_path = os.path.join(l[0],"controlnet_feature")
+    #             if not os.path.exists(feature_path):
+    #                 os.makedirs(feature_path)
+    #             feature_path = os.path.join(l[0],"controlnet_feature", "%04d.pt" % l[1])
+    #             if torch.isnan(out_vae[i]).any():
+    #                 print(l)
+    #                 print('NAN occur! Exit!')
+    #             if torch.isinf(out_vae[i]).any():
+    #                 print(l)
+    #                 print('INF occur! Exit!')
+    #             cur = out_vae[i].to(torch.float32).clone()
+    #             torch.save(cur,feature_path)
         
     # from tqdm import tqdm
     # for i in tqdm(dataset):

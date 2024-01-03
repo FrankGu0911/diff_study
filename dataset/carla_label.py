@@ -271,10 +271,23 @@ class CarlaLabel():
     def stop_reason_onehot(self):
         return torch.cat([self.should_break,self.should_slow,self.is_junction,self.is_vehicle_present,self.is_bike_present,self.is_lane_vehicle_present,self.is_junction_vehicle_present,self.is_pedestrian_present,self.is_red_light_present],dim=0).to(torch.float32)
     
+    @property
+    def future_stop_reason(self):
+        if self.cache is not None:
+            assert isinstance(self.cache,dict)
+            key = "/".join(self.root_path.replace("\\","/").split("/")[-3:])
+            if key in self.cache.keys():
+                stop_reason = []
+                for i in range(self.pred_len):
+                    stop_reason.append(self.cache[key]['sr'][self.index+i])
+                return torch.tensor(stop_reason,dtype=torch.float32)
+        else:
+            raise RuntimeError('Not using cache may cause disk error')
+    
 if __name__ == "__main__":
     # a = CarlaLabel("test/data/weather-0/data/routes_town01_long_w0_06_23_01_05_07", 0,vae_model_path='pretrained/vae_one_hot/vae_model_54.pth')
     a = CarlaLabel("E:\\remote\\dataset-full\\weather-0\\data\\routes_town01_long_w0_06_23_00_31_21", 65,pred_len=4)
-    print(a.future_waypoints)
+    print(a.future_stop_reason)
     # print(a.command_waypoints)
     # print(a.measurements_onehot)
     # print(a.measurements_onehot.shape)
